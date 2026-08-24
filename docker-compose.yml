@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # MySQL 8.0 Database Container
+  db:
+    image: mysql:8.0
+    container_name: ap_invoice_ocr_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_123
+      MYSQL_DATABASE: ap_invoice_ocr
+      MYSQL_USER: ap_user
+      MYSQL_PASSWORD: ap_password_123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password_123"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # FastAPI Web Application Container
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ap_invoice_ocr_web
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_ENGINE=mysql
+      - MYSQL_HOST=db
+      - MYSQL_PORT=3306
+      - MYSQL_DATABASE=ap_invoice_ocr
+      - MYSQL_USER=ap_user
+      - MYSQL_PASSWORD=ap_password_123
+      - SAP_SERVICE_LAYER_BASE_URL=https://rain.rfgb.net:50000/b1s/v1
+      - SAP_API_BASE_URL=https://rain.rfgb.net:50000/b1s/v2
+      - SAP_COMPANY_DB=LLM__TESTNEW
+      - SAP_USERNAME=RFGB\LLM.USER02
+      - SAP_PASSWORD=l~P59iU3Y~2w
+      - SAP_VERIFY_TLS=true
+      - SAP_POSTING_ENABLED=true
+      - OCR_PROVIDER=nvidia
+      - NVIDIA_API_KEY=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
+      - VISION_PROVIDER=nvidia
+    volumes:
+      - ./data/uploads:/app/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+    driver: local

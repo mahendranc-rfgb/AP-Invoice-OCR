@@ -1,0 +1,3282 @@
+// Global page navigation stub for immediate inline onclick handler readiness
+window.switchPage = window.switchPage || function(pageKey) {
+  window._pendingSwitchPageKey = pageKey;
+  window.location.hash = pageKey === "dashboard" ? "" : pageKey;
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  let currentUploadId = null;
+  let currentDocument = null;
+  let documentQueue = [];
+
+  // DOM Elements
+  const fileInput = document.getElementById("invoice-file-input");
+  const browseBtn = document.getElementById("btn-browse-file");
+  const uploadState = document.getElementById("upload-state-text");
+  const ocrPreview = document.getElementById("ocr-preview");
+  const ocrConfidence = document.getElementById("ocr-confidence-badges");
+  const ocrText = document.getElementById("ocr-text-box");
+  const showOcrTextBtn = document.getElementById("btn-show-ocr-text");
+  const invoiceForm = document.getElementById("sap-invoice-form");
+  const extractionStatusPill = document.getElementById("extraction-status-pill");
+
+  const btnMap = document.getElementById("btn-map");
+  const btnValidate = document.getElementById("btn-validate");
+  const btnApprove = document.getElementById("btn-approve");
+  const btnDraft = document.getElementById("btn-draft");
+  const statusPill = document.getElementById("document-status-pill");
+  const resultConsole = document.getElementById("result");
+  const sapDocNumDisplay = document.getElementById("sap-doc-num-display");
+
+  const draftModal = document.getElementById("draft-modal");
+  const closeDraftModal = document.getElementById("close-draft-modal");
+  const draftJsonPre = document.getElementById("draft-json");
+  const postDraftBtn = document.getElementById("post-draft");
+
+  const trainingAccuracyGauge = document.getElementById("training-accuracy-score");
+  const trainingScoreLabel = document.getElementById("training-score-label");
+  const trainingDiffViewer = document.getElementById("training-diff-viewer");
+  const historyTbody = document.getElementById("history-tbody");
+  const btnRefreshHistory = document.getElementById("btn-refresh-history");
+
+  const metricDocs = document.getElementById("metric-docs");
+  const metricReady = document.getElementById("metric-ready");
+  const metricReview = document.getElementById("metric-review");
+  const queueCount = document.getElementById("queue-count");
+  const documentsTbody = document.getElementById("documents");
+  const refreshBtn = document.getElementById("refresh");
+  const toast = document.getElementById("toast");
+
+  // User & Admin Authentication Logic
+  let currentUserRole = sessionStorage.getItem("user_role") || null;
+  let currentUsername = sessionStorage.getItem("username") || null;
+
+  const authModal = document.getElementById("auth-modal");
+  const authForm = document.getElementById("auth-form");
+  const userRoleBadge = document.getElementById("user-role-badge");
+  const btnLogout = document.getElementById("btn-logout");
+
+  // Multi-Page Navigation Switching Declarations
+  const navLinks = {
+    dashboard: document.getElementById("nav-dashboard"),
+    invoice: document.getElementById("nav-invoice"),
+    training: document.getElementById("nav-training"),
+    queue: document.getElementById("nav-queue"),
+    admin: document.getElementById("nav-admin"),
+  };
+
+  const pages = {
+    dashboard: document.getElementById("page-dashboard"),
+    invoice: document.getElementById("page-invoice"),
+    training: document.getElementById("page-training"),
+    queue: document.getElementById("page-queue"),
+    admin: document.getElementById("page-admin"),
+  };
+
+  function updateAuthUI() {
+    const storedRole = sessionStorage.getItem("user_role") || currentUserRole;
+    const storedUser = sessionStorage.getItem("username") || currentUsername;
+    const roleBadge = document.getElementById("user-role-badge");
+    const authModal = document.getElementById("auth-modal");
+
+    if (storedUser && storedRole) {
+      currentUserRole = storedRole;
+      currentUsername = storedUser;
+      if (roleBadge) {
+        roleBadge.innerHTML = `👤 Logged in as: <strong>${storedUser}</strong> (${storedRole.toUpperCase()})`;
+        roleBadge.style.background = storedRole === "admin" ? "rgba(234, 179, 8, 0.15)" : "rgba(16, 185, 129, 0.15)";
+        roleBadge.style.borderColor = storedRole === "admin" ? "var(--sap-gold)" : "#10b981";
+        roleBadge.style.color = storedRole === "admin" ? "var(--sap-gold)" : "#10b981";
+      }
+      if (authModal) {
+        authModal.classList.add("hidden");
+      }
+      if (navLinks && navLinks.admin) {
+        if (storedRole === "admin") {
+          navLinks.admin.style.display = "flex";
+        } else {
+          navLinks.admin.style.display = "none";
+        }
+      }
+    } else {
+      // Default to guest admin mode if not explicitly logged in
+      sessionStorage.setItem("user_role", "admin");
+      sessionStorage.setItem("username", "admin");
+      currentUserRole = "admin";
+      currentUsername = "admin";
+      if (roleBadge) {
+        roleBadge.innerHTML = `👤 Logged in as: <strong>admin</strong> (ADMIN)`;
+        roleBadge.style.background = "rgba(234, 179, 8, 0.15)";
+        roleBadge.style.borderColor = "var(--sap-gold)";
+        roleBadge.style.color = "var(--sap-gold)";
+      }
+      if (authModal) {
+        authModal.classList.add("hidden");
+      }
+      if (navLinks && navLinks.admin) {
+        navLinks.admin.style.display = "flex";
+      }
+    }
+  }
+
+  async function handlePortalLogin(e) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const roleSelect = document.getElementById("auth-role-input");
+    let role = roleSelect ? roleSelect.value : "";
+    const usernameInput = document.getElementById("auth-username-input");
+    const passwordInput = document.getElementById("auth-password-input");
+    const username = usernameInput ? usernameInput.value : "";
+    const password = passwordInput ? passwordInput.value : "";
+
+    if (!username || !password) {
+      showToast("Please enter both username and password.", "warning");
+      return false;
+    }
+
+    if (username.trim().toLowerCase() === "admin" && roleSelect) {
+      roleSelect.value = "admin";
+      role = "admin";
+    }
+
+    try {
+      const res = await fetch("/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password, role })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Authentication failed");
+      }
+
+      const data = await res.json();
+      currentUserRole = data.role;
+      currentUsername = data.username;
+
+      sessionStorage.setItem("user_role", data.role);
+      sessionStorage.setItem("username", data.username);
+
+      updateAuthUI();
+      if (data.role === "admin") {
+        switchPage("admin");
+      } else {
+        switchPage("dashboard");
+      }
+      showToast(`Welcome ${data.username}! Logged in as ${data.role.toUpperCase()}`, "success");
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+    return false;
+  }
+
+  window.handlePortalLogin = handlePortalLogin;
+
+  if (authForm) {
+    authForm.addEventListener("submit", handlePortalLogin);
+  }
+
+  const btnSubmitAuth = document.getElementById("btn-submit-auth");
+  if (btnSubmitAuth) {
+    btnSubmitAuth.addEventListener("click", handlePortalLogin);
+  }
+
+  if (btnLogout) {
+    btnLogout.addEventListener("click", () => {
+      sessionStorage.clear();
+      currentUserRole = null;
+      currentUsername = null;
+      updateAuthUI();
+      showToast("Logged out successfully.", "info");
+    });
+  }
+
+  const roleBadgeEl = document.getElementById("user-role-badge");
+  if (roleBadgeEl) {
+    roleBadgeEl.addEventListener("click", () => {
+      const authModal = document.getElementById("auth-modal");
+      if (authModal) authModal.classList.remove("hidden");
+    });
+  }
+
+  updateAuthUI();
+
+
+  function switchPage(pageKey) {
+    if (pageKey === "admin" && currentUserRole !== "admin") {
+      showToast("Administrator role required to access Admin page.", "warning");
+      return;
+    }
+
+    Object.keys(pages).forEach(key => {
+      if (pages[key]) {
+        if (key === pageKey) {
+          pages[key].classList.remove("hidden");
+          pages[key].classList.add("active");
+        } else {
+          pages[key].classList.add("hidden");
+          pages[key].classList.remove("active");
+        }
+      }
+      if (navLinks[key]) {
+        if (key === pageKey) {
+          navLinks[key].classList.add("active");
+        } else {
+          navLinks[key].classList.remove("active");
+        }
+      }
+    });
+
+    window.location.hash = pageKey === "dashboard" ? "" : pageKey;
+
+    if (pageKey === "dashboard") {
+      fetchQueue();
+    } else if (pageKey === "admin") {
+      fetchAdminConfig();
+      fetchAdminMasterTable();
+      fetchAdminFormFieldsTable();
+      fetchAdminUserTable();
+      fetchAiPrompt();
+    } else if (pageKey === "training") {
+      fetchMappingHistory();
+    } else if (pageKey === "queue") {
+      fetchQueue();
+    }
+  }
+
+  window.switchPage = switchPage;
+  if (window._pendingSwitchPageKey) {
+    switchPage(window._pendingSwitchPageKey);
+    delete window._pendingSwitchPageKey;
+  }
+
+  if (navLinks.dashboard) navLinks.dashboard.addEventListener("click", (e) => { e.preventDefault(); switchPage("dashboard"); });
+  if (navLinks.invoice) navLinks.invoice.addEventListener("click", (e) => { e.preventDefault(); switchPage("invoice"); });
+  if (navLinks.training) navLinks.training.addEventListener("click", (e) => { e.preventDefault(); switchPage("training"); });
+  if (navLinks.queue) navLinks.queue.addEventListener("click", (e) => { e.preventDefault(); switchPage("queue"); });
+  if (navLinks.admin) navLinks.admin.addEventListener("click", (e) => { e.preventDefault(); switchPage("admin"); });
+
+  window.addEventListener("hashchange", () => {
+    const hash = window.location.hash.toLowerCase();
+    if (hash === "#training" || hash === "#ai-training-panel") switchPage("training");
+    else if (hash === "#queue") switchPage("queue");
+    else if (hash === "#admin" || hash === "#admin-panel") switchPage("admin");
+    else if (hash === "#invoice" || hash === "#sap-invoice-window") switchPage("invoice");
+    else switchPage("dashboard");
+  });
+
+  // Handle initial hash navigation
+  const initHash = window.location.hash.toLowerCase();
+  if (initHash === "#training" || initHash === "#ai-training-panel") switchPage("training");
+  else if (initHash === "#queue") switchPage("queue");
+  else if (initHash === "#admin" || initHash === "#admin-panel") switchPage("admin");
+  else if (initHash === "#invoice" || initHash === "#sap-invoice-window") switchPage("invoice");
+  else switchPage("dashboard");
+
+  // Subtab Navigation Handlers
+  window.switchInvoiceSubtab = function(tabKey) {
+    const tabs = {
+      entry: { btn: document.getElementById("subtab-invoice-entry"), sec: document.getElementById("invoice-subtab-entry-sec") },
+      ocr: { btn: document.getElementById("subtab-invoice-ocr"), sec: document.getElementById("invoice-subtab-ocr-sec") },
+      console: { btn: document.getElementById("subtab-invoice-console"), sec: document.getElementById("invoice-subtab-console-sec") },
+    };
+    Object.keys(tabs).forEach(key => {
+      if (tabs[key].btn && tabs[key].sec) {
+        if (key === tabKey) {
+          tabs[key].btn.classList.add("active");
+          tabs[key].sec.classList.remove("hidden");
+        } else {
+          tabs[key].btn.classList.remove("active");
+          tabs[key].sec.classList.add("hidden");
+        }
+      }
+    });
+  };
+
+  // SAP Window inner tabs (Contents, Logistics, Accounting, Tax & Compliance)
+  document.querySelectorAll(".sap-tab").forEach(tabBtn => {
+    tabBtn.addEventListener("click", () => {
+      const targetTab = tabBtn.getAttribute("data-sap-tab");
+      if (!targetTab) return;
+      document.querySelectorAll(".sap-tab").forEach(b => b.classList.remove("active"));
+      tabBtn.classList.add("active");
+
+      document.querySelectorAll(".sap-tab-panel").forEach(panel => {
+        if (panel.id === `sap-tab-panel-${targetTab}`) {
+          panel.classList.remove("hidden");
+        } else {
+          panel.classList.add("hidden");
+        }
+      });
+    });
+  });
+
+  window.switchAdminSubtab = function(tabKey) {
+    const tabs = {
+      config:    { btn: document.getElementById("subtab-admin-config"),    sec: document.getElementById("admin-subtab-config-sec") },
+      master:    { btn: document.getElementById("subtab-admin-master"),    sec: document.getElementById("admin-subtab-master-sec") },
+      form:      { btn: document.getElementById("subtab-admin-form"),      sec: document.getElementById("admin-subtab-form-sec") },
+      users:     { btn: document.getElementById("subtab-admin-users"),     sec: document.getElementById("admin-subtab-users-sec") },
+      ai:        { btn: document.getElementById("subtab-admin-ai"),        sec: document.getElementById("admin-subtab-ai-sec") },
+      training:  { btn: document.getElementById("subtab-admin-training"), sec: document.getElementById("admin-subtab-training-sec") }
+    };
+    Object.keys(tabs).forEach(key => {
+      if (tabs[key].btn && tabs[key].sec) {
+        if (key === tabKey) {
+          tabs[key].btn.classList.add("active");
+          tabs[key].sec.classList.remove("hidden");
+        } else {
+          tabs[key].btn.classList.remove("active");
+          tabs[key].sec.classList.add("hidden");
+        }
+      }
+    });
+  };
+
+  async function loadMasterDataOptions() {
+    try {
+      const res = await fetch("/master-data");
+      if (!res.ok) return;
+      const data = await res.json();
+      window.masterDataCache = data;
+
+      const appendAddNew = (htmlStr) => htmlStr + `<option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option>`;
+
+      if (data.vendors) {
+        document.querySelectorAll("select[name='sap_card_code'], #select-vendor-code").forEach(s => {
+          const currentVal = s.value;
+          s.innerHTML = appendAddNew(`<option value="" data-name="" data-gstin="" data-currency="" data-pay-to="" data-ship-to="" data-pay-terms="" data-pos="">-- Select Vendor --</option>` + data.vendors.map(v => {
+            const safeName = (v.name || "").replace(/"/g, "&quot;");
+            let extraObj = {};
+            if (v.extra_data) {
+              try {
+                extraObj = typeof v.extra_data === "string" ? JSON.parse(v.extra_data) : v.extra_data;
+              } catch(e) {
+                extraObj = { gstin: v.extra_data };
+              }
+            }
+            const gstinAttr = (extraObj.gstin || extraObj.FederalTaxID || "").replace(/"/g, "&quot;");
+            const currAttr = (extraObj.currency || extraObj.Currency || "INR").replace(/"/g, "&quot;");
+            const payToAttr = (extraObj.pay_to_code || extraObj.BilltoDefault || "").replace(/"/g, "&quot;");
+            const shipToAttr = (extraObj.ship_to_code || extraObj.ShipToDefault || "").replace(/"/g, "&quot;");
+            const payTermsAttr = String(extraObj.payment_terms || extraObj.PayTermsGrpCode || "-1").replace(/"/g, "&quot;");
+            const wtaxLiableAttr = (extraObj.wtax_liable || "Yes").replace(/"/g, "&quot;");
+            const wtCodeAttr = (extraObj.wt_code || "C004").replace(/"/g, "&quot;");
+            const posAttr = (extraObj.place_of_supply || extraObj.BillToState || "TN").replace(/"/g, "&quot;");
+
+            return `<option value="${v.code}" data-name="${safeName}" data-gstin="${gstinAttr}" data-currency="${currAttr}" data-pay-to="${payToAttr}" data-ship-to="${shipToAttr}" data-pay-terms="${payTermsAttr}" data-pos="${posAttr}" data-wtax-liable="${wtaxLiableAttr}" data-wt-code="${wtCodeAttr}">${v.code} — ${v.name}</option>`;
+          }).join(""));
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+
+      if (data.currencies && data.currencies.length > 0) {
+        const selectCurr = document.getElementById("select-currency");
+        if (selectCurr) {
+          selectCurr.innerHTML = appendAddNew(data.currencies.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join(""));
+        }
+      }
+
+      if (data.series) {
+        const selectSeries = document.getElementById("select-series");
+        if (selectSeries) {
+          selectSeries.innerHTML = appendAddNew(data.series.map(s => {
+            let bplId = "";
+            let indicator = "";
+            let bplName = "";
+            if (s.extra_data) {
+              try {
+                const extraObj = JSON.parse(s.extra_data);
+                bplId = extraObj.bpl_id || "";
+                bplName = extraObj.bpl_name || "";
+                indicator = extraObj.indicator || "";
+              } catch(e) {
+                bplId = s.extra_data;
+              }
+            }
+            let labelStr = `${s.code} — ${s.name}`;
+            if (indicator) labelStr += ` - ${indicator}`;
+            if (bplName) labelStr += ` - ${bplName}`;
+            return `<option value="${s.code}" data-bpl-id="${bplId}" data-indicator="${indicator}">${labelStr}</option>`;
+          }).join(""));
+        }
+      }
+
+      if (data.branches) {
+        const selectBranch = document.getElementById("select-branch");
+        if (selectBranch) {
+          selectBranch.innerHTML = appendAddNew(data.branches.map(b => `<option value="${b.code}">${b.code} — ${b.name}</option>`).join(""));
+        }
+      }
+
+      filterSeriesByBranch();
+
+      if (data.accounts) {
+        document.querySelectorAll("select[name='gl_account']").forEach(s => {
+          const currentVal = s.value;
+          const expenseAccounts = data.accounts.filter(a => {
+            const c = String(a.code);
+            return c.startsWith('5') || c.startsWith('6') || c.startsWith('7') || c.startsWith('8') || c.startsWith('9') || a.name.toLowerCase().includes('expense');
+          });
+          const accountsToUse = expenseAccounts.length > 0 ? expenseAccounts : data.accounts;
+          s.innerHTML = appendAddNew(accountsToUse.map(a => `<option value="${a.code}">${a.code} — ${a.name}</option>`).join(""));
+          if (currentVal) s.value = currentVal;
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+
+      if (data.tax_codes) {
+        document.querySelectorAll("select[name='tax_code']").forEach(selectTax => {
+          const currentVal = selectTax.value;
+          selectTax.innerHTML = appendAddNew(data.tax_codes.map(t => `<option value="${t.code}" data-rate="${t.rate}">${t.code} (${t.rate}%)</option>`).join(""));
+          if (currentVal && Array.from(selectTax.options).some(o => o.value === currentVal)) selectTax.value = currentVal;
+        });
+      }
+
+      if (data.cost_centers1) {
+        document.querySelectorAll("select[name='costing_code']").forEach(s => {
+          const currentVal = s.value;
+          s.innerHTML = appendAddNew(data.cost_centers1.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join(""));
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+
+      if (data.cost_centers2) {
+        document.querySelectorAll("select[name='costing_code2']").forEach(s => {
+          const currentVal = s.value;
+          s.innerHTML = appendAddNew(data.cost_centers2.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join(""));
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+
+      if (data.cost_centers3) {
+        document.querySelectorAll("select[name='costing_code3']").forEach(s => {
+          const currentVal = s.value;
+          s.innerHTML = appendAddNew(data.cost_centers3.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join(""));
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+
+      if (data.items) {
+        document.querySelectorAll("select[name='sap_item_code']").forEach(s => {
+          const currentVal = s.value;
+          s.innerHTML = appendAddNew(`<option value="">-- ItemCode --</option>` + data.items.map(i => `<option value="${i.code}">${i.code} — ${i.name}</option>`).join(""));
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+
+      if (data.wtax_codes) {
+        document.querySelectorAll("select[name='wtax_code'], #select-wtax-code").forEach(s => {
+          const currentVal = s.value;
+          s.innerHTML = `<option value="">-- Select WHT Code --</option>` + data.wtax_codes.map(w => `<option value="${w.code}" data-rate="${w.extra_data}">${w.code} — ${w.name}</option>`).join("");
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+
+      if (data.sac_entries) {
+        window.sacEntriesCache = data.sac_entries;
+        document.querySelectorAll("select[name='sac_entry']").forEach(s => {
+          const currentVal = s.value;
+          s.innerHTML = appendAddNew(`<option value="">-- SAC --</option>` + data.sac_entries.map(w => `<option value="${w.extra_data}">${w.code} — ${w.name}</option>`).join(""));
+          if (currentVal && Array.from(s.options).some(o => o.value === currentVal)) s.value = currentVal;
+        });
+      }
+      
+      if (data.vendor_addresses) {
+        window.vendorAddressesCache = data.vendor_addresses;
+      }
+    } catch (err) {
+      console.error("Failed to load master data options:", err);
+    }
+  }
+
+  loadMasterDataOptions();
+
+
+  // Admin Config & Master Table Handlers
+  async function fetchAdminConfig() {
+    try {
+      const res = await fetch("/admin/config");
+      if (!res.ok) return;
+      const cfg = await res.json();
+      const inputUrl = document.getElementById("cfg-input-url");
+      const inputCompany = document.getElementById("cfg-input-company");
+      const inputUsername = document.getElementById("cfg-input-username");
+      const inputPassword = document.getElementById("cfg-input-password");
+      const ocrProviderSelect = document.getElementById("cfg-ocr-provider");
+      const ocrApiKeyInput = document.getElementById("cfg-ocr-api-key");
+      const ocrApiUrlInput = document.getElementById("cfg-ocr-api-url");
+      const ocrModelNameInput = document.getElementById("cfg-ocr-model-name");
+      const ocrEngineSpan = document.getElementById("cfg-ocr-engine");
+
+      if (inputUrl) inputUrl.value = cfg.sap_base_url || "";
+      if (inputCompany) inputCompany.value = cfg.sap_company_db || "";
+      if (inputUsername) inputUsername.value = cfg.sap_username || "";
+      if (ocrProviderSelect && cfg.ocr_provider) ocrProviderSelect.value = cfg.ocr_provider;
+      if (ocrApiKeyInput) ocrApiKeyInput.value = cfg.ocr_api_key || "";
+      if (ocrApiUrlInput) ocrApiUrlInput.value = cfg.ocr_api_url || "";
+      if (ocrModelNameInput) ocrModelNameInput.value = cfg.ocr_model_name || "NVIDIA Llama 3.2 Vision OCR";
+
+      if (ocrEngineSpan) {
+        const providerName = cfg.ocr_provider ? cfg.ocr_provider.toUpperCase() : "NVIDIA_OCR";
+        const modelName = cfg.ocr_model_name || "NVIDIA Llama 3.2 Vision OCR";
+        ocrEngineSpan.textContent = `Active Engine: ${providerName} (${modelName})`;
+      }
+    } catch (err) {
+      console.error("Failed to fetch admin config:", err);
+    }
+  }
+
+  const adminConfigForm = document.getElementById("admin-config-form");
+  if (adminConfigForm) {
+    adminConfigForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const sap_base_url = document.getElementById("cfg-input-url").value;
+      const sap_company_db = document.getElementById("cfg-input-company").value;
+      const sap_username = document.getElementById("cfg-input-username").value;
+      const sap_password = document.getElementById("cfg-input-password").value;
+      const ocr_provider = document.getElementById("cfg-ocr-provider").value;
+      const ocr_api_key = document.getElementById("cfg-ocr-api-key").value;
+      const ocr_api_url = document.getElementById("cfg-ocr-api-url").value;
+      const ocr_model_name = document.getElementById("cfg-ocr-model-name").value;
+
+      try {
+        const res = await fetch("/admin/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sap_base_url,
+            sap_company_db,
+            sap_username,
+            sap_password,
+            ocr_provider,
+            ocr_api_key,
+            ocr_api_url,
+            ocr_model_name
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Failed to update configuration");
+        }
+        showToast("System & OCR Configuration updated successfully!", "success");
+        await fetchAdminConfig();
+      } catch (err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  let adminMasterDataList = [];
+
+  async function fetchAdminMasterTable() {
+    try {
+      const res = await fetch("/master-data");
+      if (!res.ok) return;
+      const data = await res.json();
+      adminMasterDataList = [];
+
+      Object.keys(data).forEach(cat => {
+        data[cat].forEach(item => {
+          adminMasterDataList.push({
+            category: cat,
+            code: item.code,
+            name: item.name || item.code,
+            extra: item.extra_data || item.rate || item.extra || "",
+            is_default: !!item.is_default
+          });
+        });
+      });
+
+      renderAdminMasterTable();
+    } catch (err) {
+      console.error("Failed to fetch master table:", err);
+    }
+  }
+
+  const adminFilterSelect = document.getElementById("admin-filter-category");
+
+  function updateSyncButtonLabel() {
+    const formCat = document.getElementById("admin-category");
+    const filterVal = formCat ? formCat.value : "all";
+    if (btnSapSyncMaster) {
+      if (filterVal === "all") {
+        btnSapSyncMaster.textContent = "⚡ Sync All Master Tables from SAP";
+      } else {
+        const labelMap = {
+          vendors: "Vendors",
+          accounts: "G/L Accounts",
+          items: "Items",
+          tax_codes: "Tax Codes",
+          cost_centers1: "Cost Centers 1",
+          cost_centers2: "Cost Centers 2",
+          cost_centers3: "Cost Centers 3",
+          currencies: "Currencies",
+          branches: "Branches",
+          series: "Series",
+          wtax_codes: "WHT / TDS Codes",
+          vendor_addresses: "Vendor Addresses"
+        };
+        btnSapSyncMaster.textContent = `⚡ Sync ${labelMap[filterVal] || filterVal} from SAP`;
+      }
+    }
+  }
+
+  const adminCategorySelect = document.getElementById("admin-category");
+  if (adminCategorySelect) {
+    adminCategorySelect.addEventListener("change", updateSyncButtonLabel);
+  }
+
+  if (adminFilterSelect) {
+    adminFilterSelect.addEventListener("change", () => {
+      renderAdminMasterTable();
+      updateSyncButtonLabel();
+    });
+  }
+
+  // Option 1: Live SAP B1 Service Layer API Sync (Category-Specific)
+  const btnSapSyncMaster = document.getElementById("btn-sap-sync-master-data");
+  if (btnSapSyncMaster) {
+    btnSapSyncMaster.addEventListener("click", async () => {
+      const formCat = document.getElementById("admin-category");
+      const filterCat = document.getElementById("admin-filter-category");
+      let selectedCat = formCat ? formCat.value : "all";
+      if (filterCat && filterCat.value && filterCat.value !== "all") {
+        selectedCat = filterCat.value;
+      }
+      const queryParam = selectedCat !== "all" ? `?category=${encodeURIComponent(selectedCat)}` : "";
+      try {
+        showToast(`Connecting live to SAP Business One API and syncing ${selectedCat === 'all' ? 'all categories' : selectedCat}...`, "info");
+        const res = await fetch(`/admin/sap-sync-master-data${queryParam}`, { method: "POST" });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Failed to sync master data from SAP API");
+        }
+        const data = await res.json();
+        showToast(`SAP Live Sync Complete! ${data.message}`, "success");
+        await fetchAdminMasterTable();
+        await loadMasterDataOptions();
+      } catch (err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  // Option 2: Bulk Master Data Excel Upload
+  const btnTriggerExcel = document.getElementById("btn-trigger-excel-upload");
+  const inputExcelUpload = document.getElementById("admin-excel-upload-input");
+
+  if (btnTriggerExcel && inputExcelUpload) {
+    btnTriggerExcel.addEventListener("click", () => inputExcelUpload.click());
+
+    inputExcelUpload.addEventListener("change", async (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        const file = e.target.files[0];
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+          showToast(`Uploading and parsing master data Excel file '${file.name}'...`, "info");
+          const res = await fetch("/admin/master-data/bulk-upload", {
+            method: "POST",
+            body: formData
+          });
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Bulk Excel master data upload failed");
+          }
+          const data = await res.json();
+          showToast(`Excel Upload Complete! ${data.message}`, "success");
+          inputExcelUpload.value = "";
+          await fetchAdminMasterTable();
+          await loadMasterDataOptions();
+        } catch (err) {
+          showToast(err.message, "danger");
+          inputExcelUpload.value = "";
+        }
+      }
+    });
+  }
+
+  function filterSeriesByBranch() {
+    const selectBranch = document.getElementById("select-branch");
+    const selectSeries = document.getElementById("select-series");
+    if (!selectBranch || !selectSeries) return;
+
+    const selectedBranch = String(selectBranch.value).trim();
+    const currentSeriesVal = selectSeries.value;
+    const targetFY = "26-27"; // Current active financial year
+    let firstValidVal = null;
+
+    Array.from(selectSeries.options).forEach(opt => {
+      if (opt.value === "" || opt.value === "__ADD_NEW__") return;
+      const optBranch = opt.getAttribute("data-bpl-id");
+      const optIndicator = opt.getAttribute("data-indicator");
+
+      const matchBranch = !selectedBranch || !optBranch || String(optBranch) === String(selectedBranch);
+      const matchFY = !optIndicator || optIndicator === targetFY || opt.textContent.includes(targetFY);
+
+      if (matchBranch && matchFY) {
+        opt.style.display = "";
+        opt.disabled = false;
+        if (!firstValidVal) firstValidVal = opt.value;
+      } else {
+        opt.style.display = "none";
+        opt.disabled = true;
+      }
+    });
+
+    // Fallback if no series matches FY for this branch
+    if (!firstValidVal && selectedBranch) {
+      Array.from(selectSeries.options).forEach(opt => {
+        if (opt.value === "" || opt.value === "__ADD_NEW__") return;
+        const optBranch = opt.getAttribute("data-bpl-id");
+        if (!optBranch || String(optBranch) === String(selectedBranch)) {
+          opt.style.display = "";
+          opt.disabled = false;
+          if (!firstValidVal) firstValidVal = opt.value;
+        }
+      });
+    }
+
+    const currentOpt = Array.from(selectSeries.options).find(o => o.value === currentSeriesVal);
+    if (currentOpt && currentOpt.disabled && firstValidVal) {
+      selectSeries.value = firstValidVal;
+    }
+  }
+
+  const selectBranchEl = document.getElementById("select-branch");
+  if (selectBranchEl) {
+    selectBranchEl.addEventListener("change", filterSeriesByBranch);
+  }
+
+  function renderAdminMasterTable() {
+    const tbody = document.getElementById("admin-master-tbody");
+    const tableHeader = document.querySelector("#admin-master-table thead tr");
+    if (!tbody) return;
+
+    const filter = adminFilterSelect ? adminFilterSelect.value : "all";
+    const filtered = filter === "all" ? adminMasterDataList : adminMasterDataList.filter(i => i.category === filter);
+
+    if (tableHeader) {
+      if (filter === "series") {
+        tableHeader.innerHTML = "<th>Document</th><th>Series</th><th>Series Name</th><th>Period Indicator</th><th>Assigned Branch</th><th>Branch Name</th><th>Default Status</th><th>Action</th>";
+      } else if (filter === "vendors") {
+        tableHeader.innerHTML = "<th>CardCode</th><th>CardName</th><th>GSTIN</th><th>BP Currency</th><th>PayToCode</th><th>ShipToCode</th><th>Payment Terms</th><th>WTax Liable</th><th>Place of Supply</th><th>Action</th>";
+      } else {
+        tableHeader.innerHTML = "<th>Category</th><th>Code</th><th>Name / Description</th><th>Rate / Extra Data</th><th>Default Status</th><th>Action</th>";
+      }
+    }
+
+    if (filtered.length === 0) {
+      const colSpan = filter === "series" ? 8 : (filter === "vendors" ? 10 : 6);
+      tbody.innerHTML = "<tr><td colspan=\"" + colSpan + "\" class=\"empty-cell\">No master records found.</td></tr>";
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(function(item) {
+      const catSafe = String(item.category || "").replace(/'/g, "\\'");
+      const codeSafe = String(item.code || "").replace(/'/g, "\\'");
+
+      if (filter === "vendors") {
+        let gstin = "";
+        let currency = "INR";
+        let payToCode = "";
+        let shipToCode = "";
+        let payTerms = "-1";
+        let pos = "33-Tamil Nadu";
+        let wtaxLiable = "Yes";
+        let wtCode = "C004";
+
+        if (item.extra) {
+          try {
+            const extraObj = typeof item.extra === "string" ? JSON.parse(item.extra) : item.extra;
+            if (extraObj && typeof extraObj === "object") {
+              gstin = extraObj.gstin || extraObj.FederalTaxID || "";
+              currency = extraObj.currency || extraObj.Currency || "INR";
+              payToCode = extraObj.pay_to_code || extraObj.BilltoDefault || "";
+              shipToCode = extraObj.ship_to_code || extraObj.ShipToDefault || "";
+              payTerms = String(extraObj.payment_terms || extraObj.PayTermsGrpCode || "-1");
+              pos = extraObj.place_of_supply || extraObj.BillToState || "33-Tamil Nadu";
+              wtaxLiable = extraObj.wtax_liable || "Yes";
+              wtCode = extraObj.wt_code || "C004";
+            } else {
+              gstin = String(item.extra);
+            }
+          } catch(e) {
+            gstin = String(item.extra);
+          }
+        }
+
+        const isWTYes = wtaxLiable === "Yes" || wtaxLiable === "tYES" || wtaxLiable === "boYES";
+        const wtPillClass = isWTYes ? "success" : "neutral";
+        const wtLabel = isWTYes ? ("Yes - " + wtCode) : "No";
+        const rowStyle = item.is_default ? ' style="background: rgba(234, 179, 8, 0.08);"' : "";
+
+        let html = "<tr" + rowStyle + ">";
+        html += "<td><code style=\"color: var(--sap-gold); font-weight: 700;\">" + (item.code || "") + "</code></td>";
+        html += "<td><strong>" + (item.name || "") + "</strong></td>";
+        html += "<td><small>" + (gstin || "—") + "</small></td>";
+        html += "<td><span class=\"pill gold\">" + currency + "</span></td>";
+        html += "<td><small>" + (payToCode || "—") + "</small></td>";
+        html += "<td><small>" + (shipToCode || "—") + "</small></td>";
+        html += "<td><span class=\"pill neutral\">" + payTerms + "</span></td>";
+        html += "<td><span class=\"pill " + wtPillClass + "\">" + wtLabel + "</span></td>";
+        html += "<td><small>" + pos + "</small></td>";
+        html += "<td><div style=\"display:flex;gap:0.3rem;\">";
+        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--sap-gold);border-color:var(--sap-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
+        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
+        html += "</div></td></tr>";
+        return html;
+      }
+
+      if (filter === "series") {
+        let docType = "18";
+        let bplId = "1";
+        let bplName = "Tamil Nadu";
+        let indicator = "26-27";
+
+        if (item.extra) {
+          try {
+            const extraObj = JSON.parse(item.extra);
+            if (extraObj && typeof extraObj === "object") {
+              docType = extraObj.doc_type || "18";
+              bplId = extraObj.bpl_id || "1";
+              bplName = extraObj.bpl_name || (bplId === "1" ? "Tamil Nadu" : "Branch " + bplId);
+              indicator = extraObj.indicator || "26-27";
+            } else {
+              bplId = item.extra || "1";
+            }
+          } catch(e) {
+            bplId = item.extra || "1";
+          }
+        }
+
+        if (!indicator || indicator === "-") {
+          const match = (item.name || "").match(/\d{2}-?\d{2}/);
+          if (match) indicator = match[0].includes("-") ? match[0] : (match[0].slice(0,2) + "-" + match[0].slice(2));
+          else indicator = "26-27";
+        }
+
+        if (!bplName || bplName === "-") {
+          const branchMapNames = {"1":"Tamil Nadu","2":"Andhra Pradesh","3":"Kerala","4":"Karnataka","5":"Maharashtra","6":"Uttarpradesh"};
+          bplName = branchMapNames[bplId] || ("Branch " + bplId);
+        }
+
+        const defaultBtnSeries = item.is_default
+          ? "<span class=\"pill gold\">⭐ DEFAULT</span>"
+          : "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;\" onclick=\"setDefaultAdminMaster('" + catSafe + "','" + codeSafe + "')\">Set Default</button>";
+
+        let html = "<tr>";
+        html += "<td><code>" + docType + "</code></td>";
+        html += "<td><strong style=\"color:var(--sap-gold);\">" + (item.code || "") + "</strong></td>";
+        html += "<td><strong>" + (item.name || "") + "</strong></td>";
+        html += "<td><span class=\"pill gold\">" + indicator + "</span></td>";
+        html += "<td><code>" + bplId + "</code></td>";
+        html += "<td>" + bplName + "</td>";
+        html += "<td>" + defaultBtnSeries + "</td>";
+        html += "<td><div style=\"display:flex;gap:0.3rem;\">";
+        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--sap-gold);border-color:var(--sap-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
+        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
+        html += "</div></td></tr>";
+        return html;
+      }
+
+      // Generic category row
+      const defaultBtnGen = item.is_default
+        ? "<span class=\"pill gold\">⭐ DEFAULT</span>"
+        : "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;\" onclick=\"setDefaultAdminMaster('" + catSafe + "','" + codeSafe + "')\">Set Default</button>";
+      const extraDisplay = item.extra ? ("<code>" + item.extra + "</code>") : "-";
+
+      let html = "<tr>";
+      html += "<td><span class=\"pill neutral\">" + (item.category || "") + "</span></td>";
+      html += "<td><code>" + (item.code || "") + "</code></td>";
+      html += "<td>" + (item.name || "") + "</td>";
+      html += "<td>" + extraDisplay + "</td>";
+      html += "<td>" + defaultBtnGen + "</td>";
+      html += "<td><div style=\"display:flex;gap:0.3rem;\">";
+      html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--sap-gold);border-color:var(--sap-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
+      html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
+      html += "</div></td></tr>";
+      return html;
+    }).join("");
+  }
+
+  window.editAdminMasterByCode = function(category, code) {
+    const item = adminMasterDataList.find(i => i.category === category && String(i.code) === String(code));
+    if (item) {
+      editAdminMaster(item.category, item.code, item.name || "", item.extra || "");
+    }
+  };
+
+  const adminForm = document.getElementById("admin-master-form");
+  if (adminForm) {
+    adminForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const category = document.getElementById("admin-category").value;
+      const code = document.getElementById("admin-code").value;
+      const name = document.getElementById("admin-name").value;
+      const extra_data = document.getElementById("admin-extra").value;
+      const is_default = document.getElementById("admin-is-default") ? document.getElementById("admin-is-default").checked : false;
+
+      try {
+        const res = await fetch("/admin/master-data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ category, code, name, extra_data, is_default })
+        });
+        if (!res.ok) throw new Error("Failed to save master entry");
+        showToast(`Saved ${code} to ${category} ${is_default ? '(Marked as Default)' : ''}`, "success");
+        adminForm.reset();
+        await fetchAdminMasterTable();
+        await loadMasterDataOptions();
+      } catch (err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  window.editAdminMaster = async function(category, code, currentName, currentExtra) {
+    const newName = prompt(`Edit Name / Description for ${code} (${category}):`, currentName);
+    if (newName === null) return;
+    const newExtra = prompt(`Edit Rate / Extra Data for ${code}:`, currentExtra || "");
+    if (newExtra === null) return;
+
+    try {
+      const res = await fetch("/admin/master-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, code, name: newName.trim(), extra_data: newExtra.trim() })
+      });
+      if (!res.ok) throw new Error("Failed to update master record");
+      showToast(`Updated ${code} in ${category}`, "success");
+      await fetchAdminMasterTable();
+      await loadMasterDataOptions();
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  };
+
+  window.setDefaultAdminMaster = async function(category, code) {
+    try {
+      const res = await fetch("/admin/master-data/set-default", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, code })
+      });
+      if (!res.ok) throw new Error("Failed to set default entry");
+      showToast(`Set ${code} as default for ${category}`, "success");
+      await fetchAdminMasterTable();
+      await loadMasterDataOptions();
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  };
+
+  window.deleteAdminMaster = async function(category, code) {
+    if (!confirm(`Are you sure you want to delete ${code} from ${category}?`)) return;
+    try {
+      const res = await fetch(`/admin/master-data?category=${encodeURIComponent(category)}&code=${encodeURIComponent(code)}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to delete master record");
+      showToast(`Deleted ${code}`, "info");
+      await fetchAdminMasterTable();
+      await loadMasterDataOptions();
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  };
+
+  // Dynamic Form Fields Customizer Handlers
+  let adminFieldsList = [];
+
+  async function fetchAdminFormFieldsTable() {
+    try {
+      const res = await fetch("/admin/form-fields");
+      if (!res.ok) return;
+      adminFieldsList = await res.json();
+      renderAdminFormFieldsTable();
+    } catch (err) {
+      console.error("Failed to fetch form fields table:", err);
+    }
+  }
+
+  function renderAdminFormFieldsTable() {
+    const tbody = document.getElementById("admin-fields-tbody");
+    if (!tbody) return;
+
+    if (adminFieldsList.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" class="empty-cell">No form fields registered.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = adminFieldsList.map(field => `
+      <tr>
+        <td><span class="pill neutral">${field.section.toUpperCase()}</span></td>
+        <td><strong>${field.label}</strong></td>
+        <td><code style="color: var(--sap-gold);">${field.sap_param_name}</code></td>
+        <td><code>${field.field_id}</code></td>
+        <td><small>${field.field_type}</small></td>
+        <td>
+          <button type="button" class="pill ${field.enabled ? 'success' : 'danger'}" style="cursor: pointer; border: none;" onclick="toggleFormFieldEnabled('${field.field_id}', ${!field.enabled})">
+            ${field.enabled ? 'ENABLED' : 'DISABLED'}
+          </button>
+        </td>
+        <td><small>${field.required ? 'YES' : 'NO'}</small></td>
+        <td>
+          <button class="sap-btn outline" style="padding: 0.15rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteFormField('${field.field_id}')">🗑️ Delete</button>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  const adminFieldForm = document.getElementById("admin-field-form");
+  if (adminFieldForm) {
+    adminFieldForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const section = document.getElementById("field-section-select").value;
+      const field_id = document.getElementById("field-id-input").value;
+      const sap_param_name = document.getElementById("field-sap-input").value;
+      const label = document.getElementById("field-label-input").value;
+      const field_type = document.getElementById("field-type-select").value;
+
+      try {
+        const res = await fetch("/admin/form-fields", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ field_id, section, sap_param_name, label, field_type, enabled: true, required: false })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Failed to save dynamic SAP field");
+        }
+        showToast(`Saved SAP field '${label}' (${sap_param_name})`, "success");
+        adminFieldForm.reset();
+        await fetchAdminFormFieldsTable();
+      } catch (err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  window.toggleFormFieldEnabled = async function(field_id, newStatus) {
+    const found = adminFieldsList.find(f => f.field_id === field_id);
+    if (!found) return;
+    try {
+      const res = await fetch("/admin/form-fields", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...found, enabled: newStatus })
+      });
+      if (!res.ok) throw new Error("Failed to toggle field status");
+      showToast(`Field '${found.label}' status updated to ${newStatus ? 'ENABLED' : 'DISABLED'}`, "info");
+      await fetchAdminFormFieldsTable();
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  };
+
+  window.deleteFormField = async function(field_id) {
+    if (!confirm(`Are you sure you want to delete dynamic field '${field_id}'?`)) return;
+    try {
+      const res = await fetch(`/admin/form-fields?field_id=${encodeURIComponent(field_id)}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) throw new Error("Failed to delete field");
+      showToast(`Deleted field '${field_id}'`, "info");
+      await fetchAdminFormFieldsTable();
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  };
+
+  // Admin User & Password Table Handlers
+  let adminUsersList = [];
+
+  async function fetchAdminUserTable() {
+    try {
+      const res = await fetch("/admin/users");
+      if (!res.ok) return;
+      adminUsersList = await res.json();
+      renderAdminUserTable();
+    } catch (err) {
+      console.error("Failed to fetch admin user table:", err);
+    }
+  }
+
+  function renderAdminUserTable() {
+    const tbody = document.getElementById("admin-user-tbody");
+    if (!tbody) return;
+
+    if (adminUsersList.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5" class="empty-cell">No portal users found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = adminUsersList.map(user => `
+      <tr>
+        <td><strong>${user.username}</strong></td>
+        <td><span class="pill ${user.role === 'admin' ? 'warning' : 'neutral'}">${user.role.toUpperCase()}</span></td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <code id="pwd-text-${user.username}">••••••••</code>
+            <button type="button" class="sap-btn-icon" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;" title="Toggle Show Password" onclick="togglePasswordVisibility('${user.username}', '${user.password}')">👁️</button>
+          </div>
+        </td>
+        <td><small>${new Date(user.created_at).toLocaleDateString()}</small></td>
+        <td>
+          <div style="display: flex; gap: 0.3rem;">
+            <button class="sap-btn outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--sap-gold); border-color: var(--sap-gold);" onclick="editAdminUser('${user.username}', '${user.role}', '${user.password}')">✏️ Edit / Reset Pwd</button>
+            ${(user.username === 'admin' || user.username === 'user') ? '<small style="color: var(--text-dim); margin-left: 0.3rem;">Protected</small>' : `<button class="sap-btn outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteAdminUser('${user.username}')">🗑️ Delete</button>`}
+          </div>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  window.togglePasswordVisibility = function(username, realPassword) {
+    const el = document.getElementById(`pwd-text-${username}`);
+    if (!el) return;
+    if (el.textContent === "••••••••") {
+      el.textContent = realPassword;
+      el.style.color = "var(--sap-gold)";
+    } else {
+      el.textContent = "••••••••";
+      el.style.color = "";
+    }
+  };
+
+  window.editAdminUser = function(username, role, currentPassword) {
+    const roleSelect = document.getElementById("user-role-select");
+    const nameInput = document.getElementById("user-name-input");
+    const pwdInput = document.getElementById("user-password-input");
+
+    if (roleSelect) roleSelect.value = role;
+    if (nameInput) nameInput.value = username;
+    if (pwdInput) {
+      pwdInput.value = currentPassword;
+      pwdInput.focus();
+    }
+    showToast(`Loaded user '${username}' into credential editor. Change password and click Save.`, "info");
+  };
+
+  const adminUserForm = document.getElementById("admin-user-form");
+  if (adminUserForm) {
+    adminUserForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const role = document.getElementById("user-role-select").value;
+      const username = document.getElementById("user-name-input").value;
+      const password = document.getElementById("user-password-input").value;
+
+      try {
+        const res = await fetch("/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password, role })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || "Failed to save user credential");
+        }
+        showToast(`User '${username}' saved successfully!`, "success");
+        adminUserForm.reset();
+        await fetchAdminUserTable();
+      } catch (err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  window.deleteAdminUser = async function(username) {
+    if (!confirm(`Are you sure you want to delete user credential '${username}'?`)) return;
+    try {
+      const res = await fetch(`/admin/users?username=${encodeURIComponent(username)}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to delete user");
+      }
+      showToast(`User '${username}' deleted successfully.`, "info");
+      await fetchAdminUserTable();
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  };
+
+  // AI Prompt Configuration Editor Handlers
+  async function fetchAiPrompt() {
+    try {
+      const res = await fetch("/ai-prompt");
+      if (!res.ok) return;
+      const data = await res.json();
+      const promptInput = document.getElementById("admin-ai-prompt-input");
+      if (promptInput) promptInput.value = data.system_prompt || "";
+    } catch (err) {
+      console.error("Failed to fetch AI system prompt:", err);
+    }
+  }
+
+  const btnSaveAiPrompt = document.getElementById("btn-save-ai-prompt");
+  if (btnSaveAiPrompt) {
+    btnSaveAiPrompt.addEventListener("click", async () => {
+      const promptInput = document.getElementById("admin-ai-prompt-input");
+      if (!promptInput) return;
+      const newPrompt = promptInput.value.trim();
+      if (!newPrompt) {
+        showToast("System prompt cannot be empty", "warning");
+        return;
+      }
+      try {
+        const res = await fetch("/admin/ai-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ system_prompt: newPrompt })
+        });
+        if (!res.ok) throw new Error("Failed to update AI prompt");
+        showToast("AI Model System Prompt updated successfully!", "success");
+      } catch (err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  // Grid Row Management: Selection & Row Action Buttons
+  const gridTable = document.getElementById("grid-table-lines");
+  const btnAddLine = document.getElementById("btn-add-line");
+  const btnDupLine = document.getElementById("btn-dup-line");
+  const btnDelLine = document.getElementById("btn-del-line");
+
+  function getSelectedRow() {
+    if (!gridTable) return null;
+    return gridTable.querySelector("tbody tr.selected-row") || gridTable.querySelector("tbody tr:last-child");
+  }
+
+  if (gridTable && gridTable.querySelector("tbody")) {
+    gridTable.querySelector("tbody").addEventListener("click", (e) => {
+      const tr = e.target.closest("tr");
+      if (!tr) return;
+      gridTable.querySelectorAll("tbody tr").forEach(r => r.classList.remove("selected-row"));
+      tr.classList.add("selected-row");
+    });
+  }
+
+  function reindexRows() {
+    const rows = gridTable.querySelectorAll("tbody tr");
+    rows.forEach((row, idx) => {
+      const numCell = row.querySelector(".row-num");
+      if (numCell) numCell.textContent = idx;
+    });
+  }
+
+  function createNewRowHtml(templateTr = null) {
+    const tbody = gridTable.querySelector("tbody");
+    const tr = templateTr ? templateTr.cloneNode(true) : tbody.querySelector("tr").cloneNode(true);
+    tr.classList.remove("selected-row");
+
+    if (!templateTr) {
+      tr.querySelectorAll("input").forEach(inp => {
+        if (inp.name === "quantity") inp.value = "1";
+        else if (inp.name === "tax_percentage") inp.value = "0";
+        else if (inp.name === "unit_price") inp.value = "0.00";
+        else if (inp.name === "line_number" || inp.classList.contains("row-num")) return;
+        else inp.value = "";
+      });
+      const cellLineTotal = tr.querySelector(".line-total-cell");
+      if (cellLineTotal) cellLineTotal.textContent = "INR 0.00";
+
+    // Populate row selects from master data cache if available
+    if (window.masterDataCache) {
+      const data = window.masterDataCache;
+      const appendAddNew = (htmlStr) => htmlStr + `<option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option>`;
+
+      const glSelect = tr.querySelector("select[name='gl_account']");
+      if (glSelect && data.accounts) {
+        const currentVal = glSelect.value;
+        const expenseAccounts = data.accounts.filter(a => {
+          const c = String(a.code);
+          return c.startsWith('5') || c.startsWith('6') || c.startsWith('7') || c.startsWith('8') || c.startsWith('9') || a.name.toLowerCase().includes('expense');
+        });
+        const accountsToUse = expenseAccounts.length > 0 ? expenseAccounts : data.accounts;
+        glSelect.innerHTML = appendAddNew(accountsToUse.map(a => `<option value="${a.code}">${a.code} — ${a.name}</option>`).join(""));
+        if (currentVal && Array.from(glSelect.options).some(o => o.value === currentVal)) glSelect.value = currentVal;
+      }
+
+      const taxSelectEl = tr.querySelector("select[name='tax_code']");
+      if (taxSelectEl && data.tax_codes) {
+        const currentVal = taxSelectEl.value;
+        taxSelectEl.innerHTML = appendAddNew(data.tax_codes.map(t => `<option value="${t.code}" data-rate="${t.rate}">${t.code} (${t.rate}%)</option>`).join(""));
+        if (currentVal && Array.from(taxSelectEl.options).some(o => o.value === currentVal)) taxSelectEl.value = currentVal;
+      }
+
+      const cc1Select = tr.querySelector("select[name='costing_code']");
+      if (cc1Select && data.cost_centers1) {
+        const currentVal = cc1Select.value;
+        cc1Select.innerHTML = appendAddNew(data.cost_centers1.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join(""));
+        if (currentVal && Array.from(cc1Select.options).some(o => o.value === currentVal)) cc1Select.value = currentVal;
+      }
+
+      const cc2Select = tr.querySelector("select[name='costing_code2']");
+      if (cc2Select && data.cost_centers2) {
+        const currentVal = cc2Select.value;
+        cc2Select.innerHTML = appendAddNew(data.cost_centers2.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join(""));
+        if (currentVal && Array.from(cc2Select.options).some(o => o.value === currentVal)) cc2Select.value = currentVal;
+      }
+
+      const cc3Select = tr.querySelector("select[name='costing_code3']");
+      if (cc3Select && data.cost_centers3) {
+        const currentVal = cc3Select.value;
+        cc3Select.innerHTML = appendAddNew(data.cost_centers3.map(c => `<option value="${c.code}">${c.code} — ${c.name}</option>`).join(""));
+        if (currentVal && Array.from(cc3Select.options).some(o => o.value === currentVal)) cc3Select.value = currentVal;
+      }
+
+      const itemSelect = tr.querySelector("select[name='sap_item_code']");
+      if (itemSelect && data.items) {
+        const currentVal = itemSelect.value;
+        itemSelect.innerHTML = appendAddNew(`<option value="">-- ItemCode --</option>` + data.items.map(i => `<option value="${i.code}">${i.code} — ${i.name}</option>`).join(""));
+        if (currentVal && Array.from(itemSelect.options).some(o => o.value === currentVal)) itemSelect.value = currentVal;
+      }
+    }
+
+    // Attach calculation listeners to inputs in new row
+    tr.querySelectorAll("input, select").forEach(el => {
+      el.addEventListener("input", calculateTotals);
+      el.addEventListener("change", calculateTotals);
+    });
+
+    const taxSelect = tr.querySelector("select[name='tax_code']");
+    if (taxSelect) {
+      taxSelect.addEventListener("change", (e) => {
+        const opt = e.target.options[e.target.selectedIndex];
+        if (opt) {
+          const rate = opt.getAttribute("data-rate");
+          if (rate !== null && rate !== undefined) {
+            const taxInp = tr.querySelector("input[name='tax_percentage']");
+            if (taxInp) taxInp.value = rate;
+            calculateTotals();
+          }
+        }
+      });
+    }
+
+    const removeBtn = tr.querySelector(".btn-remove-row");
+    if (removeBtn) {
+      removeBtn.addEventListener("click", () => {
+        const rows = tbody.querySelectorAll("tr");
+        if (rows.length <= 1) {
+          showToast("At least one line item row is required.", "warning");
+          return;
+        }
+        tr.remove();
+        reindexRows();
+        calculateTotals();
+      });
+    }
+
+    return tr;
+  }
+
+  async function promptAndCreateCustomOption(selectEl) {
+    if (!selectEl) return;
+    const nameAttr = selectEl.name || selectEl.id || "field";
+    
+    let category = "custom";
+    let fieldLabel = "Master Data Option";
+    
+    if (nameAttr === "gl_account") { category = "accounts"; fieldLabel = "G/L Account"; }
+    else if (nameAttr === "tax_code") { category = "tax_codes"; fieldLabel = "Tax Code"; }
+    else if (nameAttr === "location_code") { category = "locations"; fieldLabel = "Location Code"; }
+    else if (nameAttr === "costing_code") { category = "cost_centers1"; fieldLabel = "Costing Code (Cost Center 1)"; }
+    else if (nameAttr === "costing_code2") { category = "cost_centers2"; fieldLabel = "Costing Code (Cost Center 2)"; }
+    else if (nameAttr === "costing_code3") { category = "cost_centers3"; fieldLabel = "Costing Code (Cost Center 3)"; }
+    else if (nameAttr === "sap_item_code") { category = "items"; fieldLabel = "SAP Item Code"; }
+    else if (nameAttr === "sap_card_code") { category = "vendors"; fieldLabel = "Supplier / Card Code"; }
+    else if (nameAttr === "local_currency" || nameAttr === "select-currency") { category = "currencies"; fieldLabel = "Currency"; }
+    else if (nameAttr === "series" || nameAttr === "select-series") { category = "series"; fieldLabel = "Series"; }
+    else if (nameAttr === "bpl_id_assigned_to_invoice" || nameAttr === "select-branch") { category = "branches"; fieldLabel = "Branch"; }
+
+    const code = prompt(`Enter new custom Code for ${fieldLabel}:`);
+    if (!code || !code.trim()) {
+      selectEl.value = selectEl.getAttribute("data-last-val") || selectEl.options[0]?.value || "";
+      return;
+    }
+    const cleanCode = code.trim();
+    
+    let extraData = "";
+    let nameText = cleanCode;
+
+    if (category === "tax_codes") {
+      const rateInput = prompt(`Enter Tax Percentage Rate (%) for tax code '${cleanCode}':`, "18.00");
+      extraData = rateInput ? rateInput.trim() : "0.00";
+    }
+
+    const descInput = prompt(`Enter Description / Name for '${cleanCode}' (optional):`, cleanCode);
+    if (descInput && descInput.trim()) {
+      nameText = descInput.trim();
+    }
+
+    let opt = Array.from(selectEl.options).find(o => o.value === cleanCode);
+    if (!opt) {
+      opt = document.createElement("option");
+      opt.value = cleanCode;
+      opt.textContent = category === "tax_codes" ? `${cleanCode} (${extraData}%)` : `${cleanCode} — ${nameText}`;
+      if (category === "tax_codes") {
+        opt.setAttribute("data-rate", extraData);
+      }
+      const addNewOpt = Array.from(selectEl.options).find(o => o.value === "__ADD_NEW__");
+      if (addNewOpt) {
+        selectEl.insertBefore(opt, addNewOpt);
+      } else {
+        selectEl.appendChild(opt);
+      }
+    }
+
+    selectEl.value = cleanCode;
+    selectEl.setAttribute("data-last-val", cleanCode);
+
+    if (category === "tax_codes") {
+      const tr = selectEl.closest("tr");
+      if (tr) {
+        const taxInp = tr.querySelector("input[name='tax_percentage']");
+        if (taxInp && extraData) {
+          taxInp.value = extraData;
+        }
+      }
+    }
+    if (category === "vendors") {
+      setInputValue("supplier_name", nameText);
+      opt.setAttribute("data-name", nameText);
+    }
+
+    calculateTotals();
+
+    try {
+      await fetch("/admin/master-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          code: cleanCode,
+          name: nameText,
+          extra_data: extraData,
+          is_default: false
+        })
+      });
+      showToast(`Added custom entry '${cleanCode}' to ${fieldLabel} master data!`, "success");
+    } catch (err) {
+      console.warn("Failed to persist custom master data option:", err);
+      showToast(`Selected custom entry '${cleanCode}' for document posting.`, "info");
+    }
+  }
+
+  document.addEventListener("change", (e) => {
+    const el = e.target;
+    if (el && el.tagName && el.tagName.toLowerCase() === "select") {
+      if (el.value === "__ADD_NEW__") {
+        promptAndCreateCustomOption(el);
+      } else {
+        el.setAttribute("data-last-val", el.value);
+      }
+    }
+  });
+
+
+  if (btnAddLine) {
+    btnAddLine.addEventListener("click", () => {
+      const tbody = gridTable.querySelector("tbody");
+      const newTr = createNewRowHtml();
+      tbody.appendChild(newTr);
+      reindexRows();
+      calculateTotals();
+      showToast("Added new line item row.", "info");
+    });
+  }
+
+  if (btnDupLine) {
+    btnDupLine.addEventListener("click", () => {
+      const selTr = getSelectedRow();
+      if (!selTr) return;
+      const tbody = gridTable.querySelector("tbody");
+      const dupTr = createNewRowHtml(selTr);
+      selTr.after(dupTr);
+      reindexRows();
+      calculateTotals();
+      showToast("Duplicated selected line item row.", "info");
+    });
+  }
+
+  if (btnDelLine) {
+    btnDelLine.addEventListener("click", () => {
+      const rows = gridTable.querySelectorAll("tbody tr");
+      if (rows.length <= 1) {
+        showToast("At least one line item row is required.", "warning");
+        return;
+      }
+      const selTr = getSelectedRow();
+      if (selTr) {
+        selTr.remove();
+        reindexRows();
+        calculateTotals();
+        showToast("Deleted line item row.", "info");
+      }
+    });
+  }
+
+  function showToast(message, type = "info") {
+    toast.textContent = message;
+    toast.className = `toast ${type} show`;
+    setTimeout(() => {
+      toast.className = "toast";
+    }, 4000);
+  }
+
+  function updateStepper(stepNumber) {
+    for (let i = 1; i <= 4; i++) {
+      const pill = document.getElementById(`step-pill-${i}`);
+      if (pill) {
+        if (i < stepNumber) {
+          pill.className = "stepper-step done";
+        } else if (i === stepNumber) {
+          pill.className = "stepper-step active";
+        } else {
+          pill.className = "stepper-step";
+        }
+      }
+    }
+  }
+
+  // Upload file handling (Single & Bulk)
+  browseBtn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", async (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      if (e.target.files.length === 1) {
+        await uploadInvoiceFile(e.target.files[0]);
+      } else {
+        await uploadBulkInvoiceFiles(Array.from(e.target.files));
+      }
+    }
+  });
+
+  window.addEventListener("dragover", (e) => e.preventDefault());
+  window.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (e.dataTransfer.files.length === 1) {
+        await uploadInvoiceFile(e.dataTransfer.files[0]);
+      } else {
+        await uploadBulkInvoiceFiles(Array.from(e.dataTransfer.files));
+      }
+    }
+  });
+
+  async function uploadBulkInvoiceFiles(files) {
+    uploadState.textContent = `Batch Extracting ${files.length} Bulk Invoices...`;
+    const formData = new FormData();
+    files.forEach(f => formData.append("files", f));
+
+    try {
+      showToast(`Uploading and processing OCR for ${files.length} bulk invoice documents...`, "info");
+      const response = await fetch("/uploads/ocr/bulk", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errMsg = "Bulk OCR Extraction failed";
+        try {
+          const errData = await response.json();
+          errMsg = errData.detail || errData.message || errMsg;
+        } catch (e) {
+          const text = await response.text();
+          errMsg = text || errMsg;
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      uploadState.textContent = `Extracted ${data.processed} of ${data.total} bulk documents!`;
+      extractionStatusPill.textContent = "Bulk Extraction Complete";
+      extractionStatusPill.className = "pill success";
+
+      await fetchQueue();
+      showToast(`Bulk OCR Complete! Successfully extracted and queued ${data.processed} invoices in Document Queue.`, "success");
+
+      // Automatically navigate to Document Queue so user can select documents one by one for SAP posting
+      switchPage("queue");
+    } catch (err) {
+      showToast(err.message, "danger");
+      uploadState.textContent = "Bulk upload failed";
+    }
+  }
+
+  async function uploadInvoiceFile(file) {
+    uploadState.textContent = `Processing OCR: ${file.name}...`;
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("/uploads/ocr", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errMsg = "OCR Extraction failed";
+        try {
+          const errData = await response.json();
+          errMsg = errData.detail || errData.message || errMsg;
+        } catch (e) {
+          const text = await response.text();
+          errMsg = text || errMsg;
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      currentUploadId = data.upload_id;
+      // Reset upload UI on success already handled elsewhere
+      uploadState.textContent = `Extracted: ${data.filename}`;
+      extractionStatusPill.textContent = data.extraction_status;
+      extractionStatusPill.className = "pill success";
+
+      ocrText.textContent = data.extracted_text || "Raw OCR Text ready.";
+      ocrPreview.classList.remove("hidden");
+
+      // Display field confidence badges
+      ocrConfidence.innerHTML = "";
+      if (data.field_confidence) {
+        Object.entries(data.field_confidence).forEach(([field, score]) => {
+          const badge = document.createElement("span");
+          const confClass = score >= 90 ? "success" : score >= 80 ? "warning" : "danger";
+          badge.className = `pill ${confClass}`;
+          badge.textContent = `${field}: ${score}%`;
+          ocrConfidence.appendChild(badge);
+        });
+      }
+
+      if (data.upload_id) {
+        const fileUrl = `/uploads/${data.upload_id}/file`;
+        const frame = document.getElementById("doc-viewer-frame");
+        const panel = document.getElementById("doc-viewer-panel");
+        const extBtn = document.getElementById("btn-doc-external");
+        if (frame) frame.src = fileUrl;
+        if (extBtn) extBtn.href = fileUrl;
+        if (panel) panel.classList.remove("hidden");
+      }
+
+      if (data.invoice) {
+        populateFormWithInvoice(data.invoice);
+      }
+
+      showToast("Invoice OCR complete! Extracted document preview & values loaded side-by-side.", "success");
+      updateStepper(2);
+    } catch (err) {
+      showToast(err.message, "danger");
+      if (uploadState.textContent.startsWith("Processing OCR:")) {
+        uploadState.textContent = "Upload failed";
+      }
+    }
+  }
+
+  showOcrTextBtn.addEventListener("click", () => {
+    ocrText.classList.toggle("hidden");
+  });
+
+  function populateFormWithInvoice(inv) {
+    const h = inv.invoice_header || {};
+    const s = inv.supplier || {};
+    const lines = inv.lines || [];
+
+    if (h.supplier_name) setInputValue("supplier_name", h.supplier_name);
+    if (s.sap_card_code) setInputValue("sap_card_code", s.sap_card_code);
+    if (h.supplier_gstin) setInputValue("supplier_gstin", h.supplier_gstin);
+    if (h.invoice_number) setInputValue("invoice_number", h.invoice_number);
+    if (h.invoice_date) setInputValue("invoice_date", h.invoice_date);
+    if (h.posting_date) setInputValue("posting_date", h.posting_date);
+    if (h.due_date) setInputValue("due_date", h.due_date);
+    if (h.local_currency) setInputValue("local_currency", h.local_currency);
+
+    // Accounting & Logistics Tab Fields
+    if (h.journal_memo) setInputValue("journal_memo", h.journal_memo);
+    if (h.control_account) setInputValue("control_account", h.control_account);
+    if (h.payment_group_code) setInputValue("payment_group_code", h.payment_group_code);
+    if (h.payment_method) setInputValue("payment_method", h.payment_method);
+    if (h.central_bank_indicator) setInputValue("central_bank_indicator", h.central_bank_indicator);
+    if (h.number_of_installments) setInputValue("number_of_installments", h.number_of_installments);
+    if (h.ship_to_address) setInputValue("ship_to_address", h.ship_to_address);
+    if (h.pay_to_address) setInputValue("pay_to_address", h.pay_to_address);
+    if (h.transportation_code) setInputValue("transportation_code", h.transportation_code);
+    if (h.place_of_supply) setInputValue("place_of_supply", h.place_of_supply);
+    if (h.vat_reg_num) setInputValue("vat_reg_num", h.vat_reg_num);
+
+    const tbody = gridTable.querySelector("tbody");
+    if (tbody && lines.length > 0) {
+      const templateRow = tbody.querySelector("tr") ? tbody.querySelector("tr").cloneNode(true) : null;
+      tbody.innerHTML = ""; // Clear default single row
+
+      lines.forEach((line) => {
+        const tr = createNewRowHtml(templateRow);
+        
+        const setRowInput = (name, val) => {
+          const input = tr.querySelector(`[name="${name}"]`);
+          if (!input) return;
+          if (input.tagName.toLowerCase() === "select") {
+            const optionExists = Array.from(input.options).some(opt => opt.value === String(val));
+            if (!optionExists && val !== null && val !== undefined && val !== "") {
+              const newOpt = document.createElement("option");
+              newOpt.value = val;
+              newOpt.textContent = val;
+              const addNewOpt = Array.from(input.options).find(o => o.value === "__ADD_NEW__");
+              if (addNewOpt) {
+                input.insertBefore(newOpt, addNewOpt);
+              } else {
+                input.appendChild(newOpt);
+              }
+            }
+            input.value = val;
+          } else {
+            input.value = val !== null && val !== undefined ? val : "";
+          }
+        };
+
+        if (line.description) setRowInput("description", line.description);
+        if (line.sap_item_code) setRowInput("sap_item_code", line.sap_item_code);
+        if (line.gl_account) setRowInput("gl_account", line.gl_account);
+        if (line.sac_entry) {
+          let sacValToSet = line.sac_entry;
+          if (window.sacEntriesCache) {
+             const matchedSac = window.sacEntriesCache.find(s => String(s.code) === String(line.sac_entry));
+             if (matchedSac && matchedSac.extra_data) {
+                sacValToSet = matchedSac.extra_data;
+             }
+          }
+          setRowInput("sac_entry", sacValToSet);
+        }
+        if (line.quantity) setRowInput("quantity", line.quantity);
+        if (line.unit_price) setRowInput("unit_price", line.unit_price);
+        if (line.tax_percentage) setRowInput("tax_percentage", line.tax_percentage);
+        if (line.tax_code) setRowInput("tax_code", line.tax_code);
+        if (line.location_code) setRowInput("location_code", line.location_code);
+        if (line.wtax_liable) setRowInput("wtax_liable", line.wtax_liable);
+        if (line.costing_code) setRowInput("costing_code", line.costing_code);
+        if (line.costing_code2) setRowInput("costing_code2", line.costing_code2);
+        if (line.costing_code3) setRowInput("costing_code3", line.costing_code3);
+
+        tbody.appendChild(tr);
+      });
+      reindexRows();
+    }
+
+    const roundoffInput = document.getElementById("footer-roundoff");
+    if (roundoffInput && invoice.totals) {
+      roundoffInput.value = (invoice.totals.rounding_amount !== undefined && invoice.totals.rounding_amount !== null) ? invoice.totals.rounding_amount : 0.00;
+    }
+
+    calculateTotals();
+  }
+
+
+  function setInputValue(name, val) {
+    const input = invoiceForm.querySelector(`[name="${name}"]`);
+    if (!input) return;
+    if (input.tagName.toLowerCase() === "select") {
+      const optionExists = Array.from(input.options).some(opt => opt.value === String(val));
+      if (!optionExists && val !== null && val !== undefined && val !== "") {
+        const newOpt = document.createElement("option");
+        newOpt.value = val;
+        newOpt.textContent = val;
+        const addNewOpt = Array.from(input.options).find(o => o.value === "__ADD_NEW__");
+        if (addNewOpt) {
+          input.insertBefore(newOpt, addNewOpt);
+        } else {
+          input.appendChild(newOpt);
+        }
+      }
+      input.value = val;
+    } else {
+      input.value = val;
+    }
+  }
+
+  function getInputValue(name) {
+    const input = invoiceForm.querySelector(`[name="${name}"]`);
+    return input ? input.value : "";
+  }
+
+  const btnClearForm = document.getElementById("btn-clear-form");
+  if (btnClearForm) {
+    btnClearForm.addEventListener("click", () => {
+      resetInvoiceForm();
+      showToast("Form cleared and reset to initial state.", "info");
+    });
+  }
+
+  function calculateTotals() {
+    let totalSubtotal = 0;
+    let totalTaxAmount = 0;
+    let totalWTaxAmount = 0;
+    let anyWtaxYes = false;
+
+    gridTable.querySelectorAll("tbody tr").forEach((tr) => {
+      const getVal = (name) => {
+        const input = tr.querySelector(`[name="${name}"]`);
+        return input ? input.value : "";
+      };
+      const qty = parseFloat(getVal("quantity")) || 0;
+      const price = parseFloat(getVal("unit_price")) || 0;
+      const taxPct = parseFloat(getVal("tax_percentage")) || 0;
+      const wtaxLiable = getVal("wtax_liable");
+
+      const subtotal = qty * price;
+      const taxAmt = (subtotal * taxPct) / 100;
+      const lineTotal = subtotal + taxAmt;
+
+      totalSubtotal += subtotal;
+      totalTaxAmount += taxAmt;
+
+      if (wtaxLiable === "tYES" || wtaxLiable === "Yes" || wtaxLiable === "boYES") {
+        anyWtaxYes = true;
+      }
+
+      const cellLineTotal = tr.querySelector(".line-total-cell");
+      if (cellLineTotal) {
+        cellLineTotal.textContent = `INR ${lineTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      }
+      const inpLineTotal = tr.querySelector("input[name='line_total']");
+      if (inpLineTotal) {
+        inpLineTotal.value = lineTotal.toFixed(2);
+      }
+    });
+
+    const roundoffEl = document.getElementById("footer-roundoff");
+    const roundoff = roundoffEl ? (parseFloat(roundoffEl.value) || 0) : 0;
+
+    // WHT alert banner + WHT amount calculation using selected code rate
+    const wtaxBanner = document.getElementById("wtax-alert-banner");
+    if (wtaxBanner) {
+      if (anyWtaxYes) {
+        wtaxBanner.classList.remove("hidden");
+        // Calculate WTax amount from selected rate
+        const wtaxCodeSel = document.getElementById("select-wtax-code");
+        if (wtaxCodeSel && wtaxCodeSel.value) {
+          const opt = wtaxCodeSel.options[wtaxCodeSel.selectedIndex];
+          const rate = parseFloat(opt.getAttribute("data-rate") || "0");
+          totalWTaxAmount = (totalSubtotal * rate) / 100;
+          const rateDisp = document.getElementById("wtax-rate-display");
+          if (rateDisp) rateDisp.value = rate.toFixed(2) + "%";
+          const amtDisp = document.getElementById("wtax-amount-display");
+          if (amtDisp) amtDisp.value = `INR ${totalWTaxAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        } else {
+          totalWTaxAmount = 0;
+          const rateDisp = document.getElementById("wtax-rate-display");
+          if (rateDisp) rateDisp.value = "";
+          const amtDisp = document.getElementById("wtax-amount-display");
+          if (amtDisp) amtDisp.value = "";
+        }
+      } else {
+        wtaxBanner.classList.add("hidden");
+        totalWTaxAmount = 0;
+        const rateDisp = document.getElementById("wtax-rate-display");
+        if (rateDisp) rateDisp.value = "";
+        const amtDisp = document.getElementById("wtax-amount-display");
+        if (amtDisp) amtDisp.value = "";
+      }
+    }
+
+    const grandTotal = totalSubtotal + totalTaxAmount + roundoff;
+
+    const subEl = document.getElementById("footer-subtotal");
+    if (subEl) subEl.textContent = `INR ${totalSubtotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const taxEl = document.getElementById("footer-tax");
+    if (taxEl) taxEl.textContent = `INR ${totalTaxAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const wtaxEl = document.getElementById("footer-wtax-amount");
+    if (wtaxEl) wtaxEl.textContent = `INR ${totalWTaxAmount.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const grandEl = document.getElementById("footer-grand-total");
+    if (grandEl) grandEl.textContent = `INR ${grandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+  }
+
+  window.recalculateInvoiceTotals = calculateTotals;
+
+  invoiceForm.addEventListener("input", calculateTotals);
+  invoiceForm.addEventListener("change", calculateTotals);
+
+  function getFormInvoicePayload() {
+    const linesPayload = [];
+    let totalSubtotal = 0;
+    let totalTaxAmount = 0;
+
+    gridTable.querySelectorAll("tbody tr").forEach((tr, index) => {
+      const getVal = (name) => {
+        const input = tr.querySelector(`[name="${name}"]`);
+        return input ? input.value : "";
+      };
+      const qty = parseFloat(getVal("quantity")) || 1;
+      const price = parseFloat(getVal("unit_price")) || 0;
+      const taxPct = parseFloat(getVal("tax_percentage")) || 0;
+
+      const subtotal = qty * price;
+      const taxAmt = (subtotal * taxPct) / 100;
+      const grossTotal = subtotal + taxAmt;
+
+      totalSubtotal += subtotal;
+      totalTaxAmount += taxAmt;
+
+      const sacVal = parseInt(getVal("sac_entry"));
+
+      linesPayload.push({
+        line_number: index + 1,
+        description: getVal("description"),
+        item_service_type: getInputValue("item_service_type") || "Service",
+        quantity: qty,
+        unit_price: price,
+        tax_percentage: taxPct,
+        tax_amount: taxAmt,
+        line_total: subtotal,
+        gross_total: grossTotal,
+        gross_price: qty > 0 ? (grossTotal / qty) : price,
+        sap_item_code: getVal("sap_item_code") || null,
+        gl_account: getVal("gl_account") || "5217103",
+        tax_code: getVal("tax_code") || "IGST0",
+        wtax_liable: getVal("wtax_liable") || "tYES",
+        sac_entry: isNaN(sacVal) ? 2 : sacVal,
+        location_code: getVal("location_code") || "1",
+        costing_code: getVal("costing_code") || "TN - KLR",
+        costing_code2: getVal("costing_code2") || "S&M",
+        costing_code3: getVal("costing_code3") || "NONE",
+        project_code: "NONE",
+        mapping_confidence: 95.0,
+      });
+    });
+
+    const roundoffEl = document.getElementById("footer-roundoff");
+    const roundoffAmt = roundoffEl ? (parseFloat(roundoffEl.value) || 0) : 0;
+    const grandTotal = totalSubtotal + totalTaxAmount + roundoffAmt;
+
+    return {
+      invoice_header: {
+        supplier_name: getInputValue("supplier_name"),
+        supplier_gstin: getInputValue("supplier_gstin") || null,
+        invoice_number: getInputValue("invoice_number"),
+        vendor_ref_no: getInputValue("invoice_number"),
+        invoice_date: getInputValue("invoice_date"),
+        document_date: getInputValue("document_date") || getInputValue("invoice_date"),
+        posting_date: getInputValue("posting_date") || getInputValue("invoice_date"),
+        due_date: getInputValue("due_date") || null,
+        local_currency: getInputValue("local_currency"),
+        series: parseInt(getInputValue("series")) || 521,
+        bpl_id_assigned_to_invoice: parseInt(getInputValue("bpl_id_assigned_to_invoice")) || 1,
+        payment_group_code: parseInt(getInputValue("payment_group_code")) || 10,
+        transaction_type: getInputValue("transaction_type") || "gsttrantyp_BillOfSupply",
+        comments: getInputValue("comments") || "Created through AI OCR Automation",
+
+        // Accounting Tab Fields
+        journal_memo: getInputValue("journal_memo") || (getInputValue("sap_card_code") ? `A/P Invoices - ${getInputValue("sap_card_code")}` : null),
+        control_account: getInputValue("control_account") || "2201001",
+        payment_method: getInputValue("payment_method") || null,
+        central_bank_indicator: getInputValue("central_bank_indicator") || null,
+        number_of_installments: parseInt(getInputValue("number_of_installments")) || 1,
+
+        // Logistics Tab Fields
+        ship_to_code: document.getElementById("select-ship-to-code") ? document.getElementById("select-ship-to-code").value : null,
+        ship_to_address: document.getElementById("ship-to-address-text") ? document.getElementById("ship-to-address-text").value : (getInputValue("ship_to_address") || null),
+        pay_to_code: document.getElementById("select-pay-to-code") ? document.getElementById("select-pay-to-code").value : null,
+        pay_to_address: document.getElementById("pay-to-address-text") ? document.getElementById("pay-to-address-text").value : (getInputValue("pay_to_address") || null),
+        transportation_code: parseInt(getInputValue("transportation_code")) || null,
+        place_of_supply: getInputValue("place_of_supply") || null,
+        vat_reg_num: getInputValue("vat_reg_num") || null,
+
+        // Tax & WHT
+        wt_code: document.getElementById("select-wtax-code") ? (document.getElementById("select-wtax-code").value || null) : null,
+      },
+      supplier: {
+        sap_card_code: getInputValue("sap_card_code") || null,
+        confidence: 95.0,
+      },
+      lines: linesPayload,
+      totals: {
+        subtotal: totalSubtotal,
+        tax_amount: totalTaxAmount,
+        rounding_amount: roundoffAmt,
+        grand_total: grandTotal,
+      },
+    };
+  }
+
+  // Bind SAP Window Sub-Tabs (Contents, Logistics, Accounting, Tax & Compliance)
+  document.querySelectorAll(".sap-tabs-bar .sap-tab").forEach(tabBtn => {
+    tabBtn.addEventListener("click", () => {
+      document.querySelectorAll(".sap-tabs-bar .sap-tab").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".sap-tab-panel").forEach(p => p.classList.add("hidden"));
+
+      tabBtn.classList.add("active");
+      const target = tabBtn.getAttribute("data-sap-tab");
+      const panel = document.getElementById(`sap-tab-panel-${target}`);
+      if (panel) panel.classList.remove("hidden");
+    });
+  });
+
+  async function syncCurrentDocumentWithForm() {
+    if (!currentDocument) return;
+    const payload = getFormInvoicePayload();
+    try {
+      const res = await fetch(`/documents/${currentDocument.document_id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        currentDocument = await res.json();
+        updateDocumentUI(currentDocument);
+      }
+    } catch (err) {
+      console.warn("Failed to auto-sync document form edits:", err);
+    }
+  }
+
+  // Consolidated 3-Step Workflow Implementation
+  // Step 1: Validate Document (Save + Master Data Search + Rule Validation)
+  invoiceForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const standardInvoicePayload = getFormInvoicePayload();
+
+    try {
+      showToast("Executing Document Validation with SAP Master-Data & Rules...", "info");
+
+      if (currentDocument) {
+        const response = await fetch(`/documents/${currentDocument.document_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(standardInvoicePayload),
+        });
+        if (!response.ok) throw new Error("Failed to update SAP document");
+        currentDocument = await response.json();
+      } else {
+        const response = await fetch("/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(standardInvoicePayload),
+        });
+        if (!response.ok) throw new Error("Failed to create SAP document");
+        currentDocument = await response.json();
+      }
+
+      // Execute Master Data Search
+      const mapRes = await fetch(`/documents/${currentDocument.document_id}/map`, { method: "POST" });
+      if (mapRes.ok) {
+        currentDocument = await mapRes.json();
+      }
+
+      // Execute Business Rule Validation
+      const valRes = await fetch(`/documents/${currentDocument.document_id}/validate`, { method: "POST" });
+      if (valRes.ok) {
+        currentDocument = await valRes.json();
+      }
+
+      updateDocumentUI(currentDocument);
+      populateFormWithInvoice(currentDocument.invoice);
+      await fetchQueue();
+      updateStepper(2);
+
+      if (currentDocument.validation && currentDocument.validation.passed) {
+        showToast("Document Validated Successfully! Step 1 Complete -> Ready for Authorization.", "success");
+      } else {
+        showToast("Document Validated with Warnings/Issues. Please review Console output.", "warning");
+      }
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  });
+
+  if (btnApprove) {
+    btnApprove.addEventListener("click", async () => {
+      await runApprove();
+    });
+  }
+
+  if (btnDraft) {
+    btnDraft.addEventListener("click", () => {
+      openDraftModal();
+      updateStepper(4);
+    });
+  }
+
+  async function runApprove() {
+    if (!currentDocument) {
+      showToast("Please upload or validate a document first by clicking '1. Validate Document'.", "warning");
+      return;
+    }
+    try {
+      const res = await fetch(`/documents/${currentDocument.document_id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approved_by: "SAP Manager" }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Authorization failed");
+      }
+
+      currentDocument = await res.json();
+      updateDocumentUI(currentDocument);
+      await fetchQueue();
+      updateStepper(3);
+      showToast("Document Authorized! Step 2 Complete -> Ready to Post to SAP B1.", "success");
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  }
+
+  async function openDraftModal() {
+    if (!currentDocument) {
+      showToast("Please upload or create a document first by clicking '1. Add & Validate Document'.", "warning");
+      return;
+    }
+    try {
+      const res = await fetch(`/documents/${currentDocument.document_id}/sap-draft`, { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to build draft payload");
+      }
+      const payload = await res.json();
+      draftJsonPre.textContent = JSON.stringify(payload, null, 2);
+      draftModal.classList.remove("hidden");
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  }
+
+  closeDraftModal.addEventListener("click", () => draftModal.classList.add("hidden"));
+
+  postDraftBtn.addEventListener("click", async () => {
+    if (!currentDocument) return;
+    try {
+      postDraftBtn.disabled = true;
+      postDraftBtn.textContent = "Posting to SAP Service Layer...";
+
+      const res = await fetch(`/documents/${currentDocument.document_id}/sap-post`, { method: "POST" });
+      const resData = await res.json();
+      const sapDocNum = resData.sap_doc_num || (resData.result ? resData.result.DocNum : null);
+      const sapDocEntry = resData.sap_doc_entry || (resData.result ? resData.result.DocEntry : null);
+
+      draftModal.classList.add("hidden");
+      showToast(`A/P Invoice successfully posted to SAP Business One! DocNum: #${sapDocNum || 'N/A'}, DocEntry: ${sapDocEntry || 'N/A'}`, "success");
+
+      if (sapDocNumDisplay && sapDocNum) {
+        sapDocNumDisplay.textContent = `DocNum: #${sapDocNum} (DocEntry: ${sapDocEntry})`;
+      }
+
+      await runTrainingComparison();
+      await fetchQueue();
+      updateStepper(5);
+
+      // Reset form fields and state to blank for real-time working flow
+      resetInvoiceForm();
+    } catch (err) {
+      showToast(err.message, "danger");
+    } finally {
+      postDraftBtn.disabled = false;
+      postDraftBtn.textContent = "Trigger Service Layer Draft POST";
+    }
+  });
+
+  function resetInvoiceForm() {
+    resetInvoiceFormAndLines();
+    extractionStatusPill.textContent = "Ready for Upload";
+    extractionStatusPill.className = "pill neutral";
+    if (sapDocNumDisplay) sapDocNumDisplay.textContent = "";
+    uploadState.textContent = "Drop an invoice file anywhere or click upload";
+    ocrText.textContent = "";
+    ocrPreview.classList.add("hidden");
+    resultConsole.innerHTML = `<div class="console-title">Business Rule Engine Output Console</div><p>Create an invoice or verify fields to run the validation engine.</p>`;
+    document.getElementById("footer-subtotal").textContent = "INR 0.00";
+    document.getElementById("footer-tax").textContent = "INR 0.00";
+    document.getElementById("footer-grand-total").textContent = "INR 0.00";
+    updateStepper(1);
+  }
+
+  async function runTrainingComparison() {
+    if (!currentDocument) return;
+    try {
+      const res = await fetch(`/documents/${currentDocument.document_id}/compare-training`, { method: "POST" });
+      if (!res.ok) return;
+      const comp = await res.json();
+
+      trainingAccuracyGauge.textContent = `${comp.accuracy_score}%`;
+      trainingScoreLabel.textContent = `Compared ${comp.total_fields} fields. Verified ${comp.matched_fields} exact SAP matches.`;
+
+      trainingDiffViewer.innerHTML = `
+        <div style="font-size: 0.85rem; color: #fff;">
+          <strong>Supplier:</strong> ${comp.supplier_name} ➔ <strong>CardCode:</strong> <code style="color: var(--sap-gold);">${comp.card_code}</code><br>
+          <strong>Invoice Ref:</strong> <code>${comp.invoice_number}</code><br>
+          <span class="pill success" style="margin-top: 0.5rem; display: inline-block;">Corrections Saved into Level 2 Memory</span>
+        </div>
+      `;
+
+      await fetchMappingHistory();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  btnRefreshHistory.addEventListener("click", fetchMappingHistory);
+
+  async function fetchMappingHistory() {
+    try {
+      const res = await fetch("/mapping-history");
+      if (!res.ok) return;
+      const history = await res.json();
+
+      if (!history || history.length === 0) {
+        historyTbody.innerHTML = `<tr><td colspan="8" class="empty-cell">No historical mapping corrections recorded yet.</td></tr>`;
+        return;
+      }
+
+      historyTbody.innerHTML = history.map(item => {
+        let typeClass = "neutral";
+        if (item.mapping_type.includes("RESPONSE") || item.mapping_type.includes("REGISTER") || item.mapping_type.includes("COMPARE")) {
+          typeClass = "gold";
+        } else if (item.mapping_type === "VENDOR") {
+          typeClass = "info";
+        }
+
+        let payloadDisplay = item.field_payload || "Standard Mapping";
+        if (payloadDisplay.includes("MATCH ✅")) {
+          payloadDisplay = `<span class="pill success" style="font-size:0.75rem;">${payloadDisplay}</span>`;
+        } else if (payloadDisplay.includes("DELTA ⚠️")) {
+          payloadDisplay = `<span class="pill warning" style="font-size:0.75rem;">${payloadDisplay}</span>`;
+        } else if (payloadDisplay.includes("CAPTURED ✅")) {
+          payloadDisplay = `<span class="pill gold" style="font-size:0.75rem;">${payloadDisplay}</span>`;
+        } else {
+          payloadDisplay = `<code>${payloadDisplay}</code>`;
+        }
+
+        return `
+          <tr>
+            <td>#${item.history_id}</td>
+            <td><strong>${item.supplier_name || 'N/A'}</strong></td>
+            <td><code>${item.ocr_value}</code></td>
+            <td><code>${item.ai_value || 'None'}</code></td>
+            <td><strong style="color: var(--sap-gold);">${item.final_correct_value}</strong></td>
+            <td><span class="pill ${typeClass}">${item.mapping_type}</span></td>
+            <td>${payloadDisplay}</td>
+            <td><small>${new Date(item.correction_date).toLocaleString()}</small></td>
+          </tr>
+        `;
+      }).join("");
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function updateDocumentUI(doc) {
+    statusPill.textContent = doc.status;
+    if (sapDocNumDisplay) sapDocNumDisplay.textContent = `[Document ID: ${doc.document_id.substring(0, 8)}]`;
+
+    if (doc.status === "VALIDATED" || doc.status === "APPROVED" || doc.status === "SAP_DRAFT_READY") {
+      statusPill.className = "pill success";
+    } else if (doc.status === "NEEDS_REVIEW") {
+      statusPill.className = "pill warning";
+    } else {
+      statusPill.className = "pill neutral";
+    }
+
+    let html = `<div class="console-title">Validation Output for Document: ${doc.document_id}</div>`;
+    html += `<b>Status:</b> ${doc.status} | <b>CardCode:</b> ${doc.invoice.supplier.sap_card_code || 'Unmapped'}<br>`;
+
+    if (doc.validation) {
+      html += `<b>Validation Passed:</b> ${doc.validation.passed ? "YES ✅" : "NO ❌"} | <b>Confidence:</b> ${doc.validation.overall_confidence}%<br>`;
+
+      if (doc.validation.issues && doc.validation.issues.length > 0) {
+        html += `<span style="color: var(--accent-rose); font-weight: 700;">Validation Issues:</span><ul>`;
+        doc.validation.issues.forEach(issue => {
+          html += `<li>[${issue.code}] ${issue.message}</li>`;
+        });
+        html += `</ul>`;
+      }
+    }
+
+    resultConsole.innerHTML = html;
+  }
+
+  const queueStatusFilter = document.getElementById("queue-status-filter");
+  if (queueStatusFilter) {
+    queueStatusFilter.addEventListener("change", renderQueueTable);
+  }
+
+  function renderQueueTable() {
+    if (!documentsTbody) return;
+
+    const filterVal = queueStatusFilter ? queueStatusFilter.value : "all";
+    let filteredDocs = documentQueue;
+
+    if (filterVal === "unposted") {
+      filteredDocs = documentQueue.filter(d => d.status !== "POSTED");
+    } else if (filterVal !== "all") {
+      filteredDocs = documentQueue.filter(d => String(d.status).toUpperCase() === filterVal.toUpperCase());
+    }
+
+    if (filteredDocs.length === 0) {
+      documentsTbody.innerHTML = `<tr><td colspan="8" class="empty-cell">No documents matching status filter '${filterVal}'.</td></tr>`;
+      return;
+    }
+
+    documentsTbody.innerHTML = filteredDocs.map(doc => {
+      const h = doc.invoice.invoice_header;
+      const s = doc.invoice.supplier || {};
+      const total = doc.invoice.totals.grand_total;
+      const taxAmt = doc.invoice.totals.tax_amount;
+
+      const docNumDisplay = doc.sap_doc_num ? `<span class="pill gold">#${doc.sap_doc_num}</span>` : `<span class="pill neutral">Unposted</span>`;
+      const docEntryDisplay = doc.sap_doc_entry ? `<code>${doc.sap_doc_entry}</code>` : `<span class="text-dim">—</span>`;
+
+      let statusClass = "neutral";
+      if (doc.status === "POSTED") statusClass = "success";
+      else if (doc.status === "APPROVED" || doc.status === "SAP_DRAFT_READY") statusClass = "gold";
+      else if (doc.status === "VALIDATED") statusClass = "info";
+
+      const supplierText = s.sap_card_code ? `<code>${s.sap_card_code}</code> - ${h.supplier_name}` : h.supplier_name;
+
+      const actionButtons = `
+        <div style="display: flex; gap: 0.3rem;">
+          <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="loadDocFromQueue('${doc.document_id}')">Select</button>
+          <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteDocument('${doc.document_id}')">🗑️ Delete</button>
+          ${doc.sap_response || doc.status === 'POSTED' ? `<button class="sap-btn gold" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="viewSapResponse('${doc.document_id}')">🔍 SAP Log</button>` : ''}
+        </div>
+      `;
+
+      return `
+        <tr>
+          <td><strong>${h.invoice_number}</strong></td>
+          <td>${docNumDisplay}</td>
+          <td>${docEntryDisplay}</td>
+          <td>${supplierText}</td>
+          <td style="font-weight: 700; color: var(--sap-gold);">INR ${parseFloat(total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+          <td>INR ${parseFloat(taxAmt).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+          <td><span class="pill ${statusClass}">${doc.status}</span></td>
+          <td>${actionButtons}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  function renderDashboardMetrics() {
+    const totalDocs = documentQueue.length;
+    const postedDocs = documentQueue.filter(d => d.status === "POSTED");
+    const readyDocs = documentQueue.filter(d => d.validation && d.validation.passed);
+    const reviewDocs = documentQueue.filter(d => d.status === "NEEDS_REVIEW");
+
+    let totalVal = 0;
+    documentQueue.forEach(d => {
+      totalVal += parseFloat(d.invoice.totals.grand_total || 0);
+    });
+
+    const statTotal = document.getElementById("dash-stat-total");
+    const statPosted = document.getElementById("dash-stat-posted");
+    const statValue = document.getElementById("dash-stat-value");
+
+    if (statTotal) statTotal.textContent = totalDocs;
+    if (statPosted) statPosted.textContent = postedDocs.length;
+    if (statValue) statValue.textContent = `INR ${totalVal.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+
+    // Bar distribution
+    const postedPct = totalDocs > 0 ? ((postedDocs.length / totalDocs) * 100).toFixed(1) : 0;
+    const readyPct = totalDocs > 0 ? ((readyDocs.length / totalDocs) * 100).toFixed(1) : 0;
+    const reviewPct = totalDocs > 0 ? ((reviewDocs.length / totalDocs) * 100).toFixed(1) : 0;
+
+    const barPosted = document.getElementById("dash-bar-posted");
+    const barReady = document.getElementById("dash-bar-ready");
+    const barReview = document.getElementById("dash-bar-review");
+
+    if (barPosted) barPosted.style.width = `${postedPct}%`;
+    if (barReady) barReady.style.width = `${readyPct}%`;
+    if (barReview) barReview.style.width = `${reviewPct}%`;
+
+    const barPostedText = document.getElementById("dash-bar-posted-text");
+    const barReadyText = document.getElementById("dash-bar-ready-text");
+    const barReviewText = document.getElementById("dash-bar-review-text");
+
+    if (barPostedText) barPostedText.textContent = `${postedDocs.length} (${postedPct}%)`;
+    if (barReadyText) barReadyText.textContent = `${readyDocs.length} (${readyPct}%)`;
+    if (barReviewText) barReviewText.textContent = `${reviewDocs.length} (${reviewPct}%)`;
+
+    // Render Recent Table on Dashboard
+    const recentTbody = document.getElementById("dash-recent-tbody");
+    if (recentTbody) {
+      const recentDocs = documentQueue.slice(0, 5);
+      if (recentDocs.length === 0) {
+        recentTbody.innerHTML = `<tr><td colspan="7" class="empty-cell">No documents in queue.</td></tr>`;
+      } else {
+        recentTbody.innerHTML = recentDocs.map(doc => {
+          const h = doc.invoice.invoice_header;
+          const s = doc.invoice.supplier || {};
+          const total = doc.invoice.totals.grand_total;
+          const taxAmt = doc.invoice.totals.tax_amount;
+
+          const docNumDisplay = doc.sap_doc_num ? `<span class="pill gold">#${doc.sap_doc_num}</span>` : `<span class="pill neutral">Unposted</span>`;
+
+          let statusClass = "neutral";
+          if (doc.status === "POSTED") statusClass = "success";
+          else if (doc.status === "APPROVED" || doc.status === "SAP_DRAFT_READY") statusClass = "gold";
+          else if (doc.status === "VALIDATED") statusClass = "info";
+
+          const supplierText = s.sap_card_code ? `<code>${s.sap_card_code}</code> - ${h.supplier_name}` : h.supplier_name;
+
+          return `
+            <tr>
+              <td><strong>${h.invoice_number}</strong></td>
+              <td>${docNumDisplay}</td>
+              <td>${supplierText}</td>
+              <td style="font-weight: 700; color: var(--sap-gold);">INR ${parseFloat(total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+              <td>INR ${parseFloat(taxAmt).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+              <td><span class="pill ${statusClass}">${doc.status}</span></td>
+              <td>
+                <div style="display: flex; gap: 0.3rem;">
+                  <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="loadDocFromQueue('${doc.document_id}')">Select</button>
+                  <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteDocument('${doc.document_id}')">🗑️ Delete</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join("");
+      }
+    }
+
+    // Render Vendors Breakdown
+    const vendorsDiv = document.getElementById("dash-vendors-list");
+    if (vendorsDiv) {
+      const vendorCounts = {};
+      documentQueue.forEach(d => {
+        const code = d.invoice.supplier.sap_card_code || "UNMAPPED";
+        const name = d.invoice.invoice_header.supplier_name || "Unknown Supplier";
+        const key = `${code}___${name}`;
+        vendorCounts[key] = (vendorCounts[key] || 0) + 1;
+      });
+
+      const vendorEntries = Object.entries(vendorCounts).slice(0, 5);
+      if (vendorEntries.length === 0) {
+        vendorsDiv.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-dim);">No vendor data available.</div>`;
+      } else {
+        vendorsDiv.innerHTML = vendorEntries.map(([key, count]) => {
+          const [code, name] = key.split("___");
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0.7rem; background: rgba(255,255,255,0.03); border-radius: 5px;">
+              <div>
+                <code>${code}</code> <span style="font-size: 0.82rem; font-weight: 600; margin-left: 0.4rem;">${name}</span>
+              </div>
+              <span class="pill gold" style="font-size: 0.75rem;">${count} Document${count > 1 ? 's' : ''}</span>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+  }
+
+  async function fetchQueue() {
+    try {
+      const res = await fetch("/documents");
+      if (!res.ok) return;
+      documentQueue = await res.json();
+
+      metricDocs.textContent = documentQueue.length;
+      metricReady.textContent = documentQueue.filter(d => d.validation && d.validation.passed).length;
+      metricReview.textContent = documentQueue.filter(d => d.status === "NEEDS_REVIEW").length;
+      queueCount.textContent = documentQueue.length;
+
+      renderQueueTable();
+      renderDashboardMetrics();
+    } catch (err) {
+      console.error("Failed to fetch document queue:", err);
+    }
+  }
+
+  const sapResponseModal = document.getElementById("sap-response-modal");
+  const closeSapResponseModal = document.getElementById("close-sap-response-modal");
+  if (closeSapResponseModal && sapResponseModal) {
+    closeSapResponseModal.addEventListener("click", () => sapResponseModal.classList.add("hidden"));
+  }
+
+  window.viewSapResponse = function(docId) {
+    const doc = documentQueue.find(d => String(d.document_id) === String(docId));
+    if (!doc) return;
+
+    const modal = document.getElementById("sap-response-modal");
+    const summaryDiv = document.getElementById("sap-response-summary");
+    const jsonPre = document.getElementById("sap-response-json");
+
+    if (summaryDiv) {
+      summaryDiv.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem; color: #fff;">
+          <div><strong>Vendor Ref / Inv #:</strong> ${doc.invoice.invoice_header.invoice_number}</div>
+          <div><strong>SAP DocNum:</strong> <span style="color: var(--sap-gold); font-weight:700;">#${doc.sap_doc_num || 'N/A'}</span></div>
+          <div><strong>SAP DocEntry:</strong> <code>${doc.sap_doc_entry || 'N/A'}</code></div>
+          <div><strong>CardCode:</strong> <code>${doc.invoice.supplier.sap_card_code || 'N/A'}</code></div>
+          <div><strong>Doc Total:</strong> INR ${parseFloat(doc.invoice.totals.grand_total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</div>
+          <div><strong>Tax Total:</strong> INR ${parseFloat(doc.invoice.totals.tax_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}</div>
+        </div>
+      `;
+    }
+
+    if (jsonPre) {
+      jsonPre.textContent = doc.sap_response ? JSON.stringify(doc.sap_response, null, 2) : "// No SAP response body captured for this document.";
+    }
+
+    if (modal) {
+      modal.classList.remove("hidden");
+    }
+  };
+
+  function resetInvoiceFormAndLines() {
+    if (invoiceForm) invoiceForm.reset();
+    const tbody = gridTable ? gridTable.querySelector("tbody") : null;
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr class="selected-row">
+          <td class="cell-center row-num">0</td>
+          <td><input name="description" placeholder="Description" required style="width: 100%;"></td>
+          <td><select name="sap_item_code" style="width: 100%;"><option value="">-- ItemCode --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <input type="text" class="gl-search-filter" placeholder="🔍 Search GL..." style="padding: 0.2rem; font-size: 0.75rem;">
+              <select name="gl_account" class="gl-account-select" style="width: 100%;">
+                <option value="">-- GL Account --</option>
+                <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option>
+              </select>
+            </div>
+          </td>
+          <td><select name="sac_entry" style="width: 100%;"><option value="">-- SAC --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><input name="quantity" type="number" value="1" min="0.001" step="0.001" style="width: 100%;"></td>
+          <td><input name="unit_price" type="number" placeholder="Price" min="0" step="0.01" style="width: 100%;"></td>
+          <td><input name="tax_percentage" type="number" value="0" min="0" step="0.01" style="width: 100%;"></td>
+          <td><select name="tax_code" style="width: 100%;"><option value="">-- Tax Code --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="location_code" style="width: 100%;"><option value="">-- Location --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="costing_code" style="width: 100%;"><option value="">-- Cost Center --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="costing_code2" style="width: 100%;"><option value="">-- Cost Center 2 --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="costing_code3" style="width: 100%;"><option value="">-- Cost Center 3 --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td class="cell-readonly line-total-cell">INR 0.00</td>
+          <td><button type="button" class="btn-remove-row" style="color: var(--accent-rose); background: none; border: none; font-size: 1.1rem; cursor: pointer;">×</button></td>
+        </tr>
+      `;
+    }
+    const roundoffInput = document.getElementById("footer-roundoff");
+    if (roundoffInput) roundoffInput.value = "0.00";
+    currentUploadId = null;
+    currentDocument = null;
+    if (sapDocNumDisplay) sapDocNumDisplay.textContent = "";
+    if (statusPill) {
+      statusPill.textContent = "NEW";
+      statusPill.className = "pill neutral";
+    }
+    loadMasterDataOptions();
+    reindexRows();
+    calculateTotals();
+  }
+
+  window.resetInvoiceFormAndLines = resetInvoiceFormAndLines;
+
+  window.loadDocFromQueue = function(docId) {
+    const found = documentQueue.find(d => String(d.document_id) === String(docId));
+    if (found) {
+      currentDocument = found;
+      populateFormWithInvoice(found.invoice);
+      updateDocumentUI(found);
+      switchPage("invoice");
+      showToast(`Loaded invoice ${found.invoice.invoice_header.invoice_number} into SAP B1 Posting screen`, "info");
+    }
+  };
+
+  window.deleteDocument = async function(docId) {
+    if (!confirm("Are you sure you want to permanently delete this document from the queue?")) return;
+    try {
+      showToast("Deleting document...", "info");
+      const res = await fetch(`/documents/${docId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete document");
+      showToast("Document deleted successfully.", "success");
+      await fetchQueue();
+    } catch (err) {
+      showToast(err.message, "danger");
+    }
+  };
+
+  refreshBtn.addEventListener("click", () => {
+    fetchQueue();
+    resetInvoiceFormAndLines();
+    showToast("Workspace and invoice form refreshed.", "info");
+  });
+
+  // Handle ItemCode selection to auto-populate Description field when in Item mode
+  if (gridTable) {
+    gridTable.addEventListener("change", (e) => {
+      if (e.target && e.target.name === "sap_item_code") {
+        const tr = e.target.closest("tr");
+        if (!tr) return;
+        const descInput = tr.querySelector("input[name='description']");
+        const selectedOpt = e.target.options[e.target.selectedIndex];
+        if (selectedOpt && selectedOpt.value && selectedOpt.value !== "__ADD_NEW__") {
+          const fullText = selectedOpt.textContent || "";
+          const parts = fullText.split(" — ");
+          const itemName = parts.length > 1 ? parts.slice(1).join(" — ").trim() : fullText.trim();
+          if (descInput) {
+            descInput.value = itemName;
+          }
+        }
+      }
+    });
+    
+    // GL Account search filter logic
+    gridTable.addEventListener("input", (e) => {
+      if (e.target && e.target.classList.contains("gl-search-filter")) {
+        const query = e.target.value.toLowerCase().trim();
+        const selectEl = e.target.nextElementSibling;
+        if (selectEl && selectEl.name === "gl_account") {
+          let firstMatch = null;
+          Array.from(selectEl.options).forEach(opt => {
+            if (!opt.value || opt.value === "__ADD_NEW__") {
+              opt.style.display = "";
+              return;
+            }
+            const match = opt.textContent.toLowerCase().includes(query) || opt.value.toLowerCase().includes(query);
+            opt.style.display = match ? "" : "none";
+            if (match && !firstMatch) firstMatch = opt;
+          });
+          if (query.length >= 2 && firstMatch) {
+            selectEl.value = firstMatch.value;
+            selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+        }
+      }
+    });
+  }
+
+  // Handle DocType (Item vs Service) switcher to toggle Description editable vs readonly mode
+  const docTypeSelectEl = invoiceForm ? invoiceForm.querySelector("[name='item_service_type']") : null;
+  function updateDocTypeMode() {
+    if (!docTypeSelectEl || !gridTable) return;
+    const docType = docTypeSelectEl.value;
+    const isItem = docType === "Item" || docType === "dDocument_Item";
+
+    gridTable.querySelectorAll("tbody tr").forEach(tr => {
+      const descInput = tr.querySelector("input[name='description']");
+      if (descInput) {
+        if (isItem) {
+          descInput.setAttribute("placeholder", "Auto-filled from ItemCode Master");
+        } else {
+          descInput.removeAttribute("readonly");
+          descInput.setAttribute("placeholder", "Enter Service Description");
+        }
+      }
+    });
+  }
+
+  if (docTypeSelectEl) {
+    docTypeSelectEl.addEventListener("change", updateDocTypeMode);
+  }
+
+  // Handle Vendor Code selection to auto-populate Vendor Name & 8 Minimum Vendor Master details
+  document.querySelectorAll("select[name='sap_card_code'], #select-vendor-code").forEach(selectVendorEl => {
+    selectVendorEl.addEventListener("change", (e) => {
+      const selectedOpt = e.target.options[e.target.selectedIndex];
+      if (selectedOpt && selectedOpt.value && selectedOpt.value !== "__ADD_NEW__") {
+        let vendorName = selectedOpt.getAttribute("data-name");
+        if (!vendorName && selectedOpt.textContent.includes(" — ")) {
+          vendorName = selectedOpt.textContent.split(" — ").slice(1).join(" — ").trim();
+        }
+        
+        const gstin = selectedOpt.getAttribute("data-gstin");
+        const pos = selectedOpt.getAttribute("data-pos");
+        const wtaxLiable = selectedOpt.getAttribute("data-wtax-liable");
+        const wtCode = selectedOpt.getAttribute("data-wt-code");
+
+        const setVal = (selector, val) => {
+          if (!val) return;
+          const el = document.querySelector(selector);
+          if (el) el.value = val;
+        };
+        
+        setVal("input[name='supplier_name']", vendorName);
+        if (gstin) {
+          setVal("input[name='supplier_gstin']", gstin);
+          setVal("input[name='vat_reg_num']", gstin);
+        }
+        if (pos) {
+          setVal("select[name='place_of_supply']", pos);
+          setVal("input[name='place_of_supply']", pos);
+        }
+
+        // Auto-populate from SAP Vendor Master (via vendorsMap)
+        const vendorData = window.vendorsMap && window.vendorsMap[selectedOpt.value];
+        if (vendorData && vendorData.extra_data) {
+          try {
+            const extra = typeof vendorData.extra_data === "string" ? JSON.parse(vendorData.extra_data) : vendorData.extra_data;
+            if (extra.currency || extra.Currency) setVal("select[name='local_currency']", extra.currency || extra.Currency);
+            
+            const paymentGroup = extra.payment_terms || extra.PayTermsGrpCode || extra.payment_group;
+            if (paymentGroup) {
+              const paySel = document.querySelector("select[name='payment_group_code']");
+              if (paySel) {
+                const matched = Array.from(paySel.options).find(o => String(o.value) === String(paymentGroup) || o.textContent.includes(String(paymentGroup)));
+                if (matched) paySel.value = matched.value;
+              }
+            }
+          } catch(e) {}
+        }
+
+        // Auto-populate WTax Liable (tYES / tNO) across all line grid rows
+        const isWTaxYes = wtaxLiable === "Yes" || wtaxLiable === "tYES" || wtaxLiable === "boYES";
+        const wtaxVal = isWTaxYes ? "tYES" : "tNO";
+        document.querySelectorAll("#grid-table-lines select[name='wtax_liable']").forEach(s => {
+          s.value = wtaxVal;
+        });
+
+        if (typeof recalculateInvoiceTotals === "function") {
+          recalculateInvoiceTotals();
+        }
+      }
+    });
+  });
+
+  // Custom Searchable Dropdowns for header and grid replaced legacy search
+
+  // Handle Live Search Filter for Admin Master Data Table
+  const adminMasterSearch = document.getElementById("admin-master-search");
+  if (adminMasterSearch) {
+    adminMasterSearch.addEventListener("input", (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      const rows = document.querySelectorAll("#admin-master-tbody tr");
+      rows.forEach(tr => {
+        const text = tr.textContent.toLowerCase();
+        tr.style.display = text.includes(q) ? "" : "none";
+      });
+    });
+  }
+
+  window.switchAdminSubtab = function(tabKey) {
+    ["config", "master", "form", "users", "ai", "training"].forEach(k => {
+      const btn = document.getElementById(`subtab-admin-${k}`);
+      const sec = document.getElementById(`admin-subtab-${k}-sec`);
+      if (btn) btn.classList.toggle("active", k === tabKey);
+      if (sec) sec.classList.toggle("hidden", k !== tabKey);
+    });
+    if (tabKey === "training") {
+      fetchAiTrainingStats();
+    }
+  };
+
+  async function fetchAiTrainingStats() {
+    try {
+      const res = await fetch("/admin/ai-train/stats");
+      if (!res.ok) return;
+      const data = await res.json();
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      setEl("ai-stat-total", data.total_records || 0);
+      setEl("ai-stat-vendors", data.vendor_rules || 0);
+      setEl("ai-stat-items", data.item_rules || 0);
+      setEl("ai-stat-gl", data.gl_rules || 0);
+    } catch(err) {
+      console.error("Failed to fetch AI stats:", err);
+    }
+  }
+
+  const browseDumpBtn = document.getElementById("btn-browse-dump-file");
+  const dumpFileInput = document.getElementById("ai-dump-file-input");
+  const dumpFileNameSpan = document.getElementById("ai-dump-file-name");
+  const uploadDumpBtn = document.getElementById("btn-upload-dump-train");
+  const syncSapHistoryBtn = document.getElementById("btn-sync-sap-history-train");
+
+  if (browseDumpBtn && dumpFileInput) {
+    browseDumpBtn.addEventListener("click", () => dumpFileInput.click());
+    dumpFileInput.addEventListener("change", (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        dumpFileNameSpan.textContent = `Selected: ${e.target.files[0].name}`;
+      }
+    });
+  }
+
+  if (uploadDumpBtn && dumpFileInput) {
+    uploadDumpBtn.addEventListener("click", async () => {
+      if (!dumpFileInput.files || dumpFileInput.files.length === 0) {
+        showToast("Please select an Excel, CSV, or JSON dump file to train the AI model.", "warning");
+        return;
+      }
+      const file = dumpFileInput.files[0];
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+        showToast(`Training AI Model from ${file.name}...`, "info");
+        const res = await fetch("/admin/ai-train/upload-dump", { method: "POST", body: formData });
+        if (!res.ok) throw new Error("Dump upload failed");
+        const data = await res.json();
+        showToast(data.message || "AI Model training complete!", "success");
+        fetchAiTrainingStats();
+      } catch(err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  if (syncSapHistoryBtn) {
+    syncSapHistoryBtn.addEventListener("click", async () => {
+      const topInput = document.getElementById("ai-sap-history-top");
+      const topCount = topInput ? parseInt(topInput.value) || 100 : 100;
+      try {
+        showToast(`Fetching last ${topCount} posted invoices from SAP B1 API to train AI Model...`, "info");
+        const res = await fetch(`/admin/ai-train/sync-sap-history?top=${topCount}`, { method: "POST" });
+        if (!res.ok) throw new Error("SAP API history sync failed");
+        const data = await res.json();
+        showToast(data.message || "AI Model trained from SAP API!", "success");
+        fetchAiTrainingStats();
+      } catch(err) {
+        showToast(err.message, "danger");
+      }
+    });
+  }
+
+  fetchQueue();
+  fetchMappingHistory();
+  
+  // Cache master data for auto-population
+  window.vendorsMap = {};
+  fetch("/master-data").then(r => r.json()).then(data => {
+    if (data.vendors) {
+      data.vendors.forEach(v => {
+        window.vendorsMap[v.code] = v;
+      });
+    }
+  }).catch(e => console.error("Failed to load master data cache:", e));
+
+});
+
+// ── WHT / TDS & Logistics Vendor Address Logic ─────────────────────────────
+
+window.onWtaxCodeChange = function() {
+  if (typeof recalculateInvoiceTotals === "function") {
+    recalculateInvoiceTotals();
+  }
+};
+
+window.onShipToCodeChange = function() {
+  const sel = document.getElementById("select-ship-to-code");
+  const txt = document.getElementById("ship-to-address-text");
+  if (sel && txt && sel.selectedIndex > 0) {
+    const opt = sel.options[sel.selectedIndex];
+    txt.value = opt.getAttribute("data-text") || "";
+  }
+};
+
+window.onPayToCodeChange = function() {
+  const sel = document.getElementById("select-pay-to-code");
+  const txt = document.getElementById("pay-to-address-text");
+  if (sel && txt && sel.selectedIndex > 0) {
+    const opt = sel.options[sel.selectedIndex];
+    txt.value = opt.getAttribute("data-text") || "";
+  }
+};
+
+// Hook into existing form inputs to catch Vendor selection change
+document.addEventListener("change", (e) => {
+  if (e.target.name === "sap_card_code" && e.target.value && e.target.value !== "__ADD_NEW__") {
+    loadVendorAddressesForInvoice(e.target.value);
+    
+    // Auto-select WHT Code based on vendor master data
+    const opt = e.target.options[e.target.selectedIndex];
+    if (opt) {
+      const wtaxCode = opt.getAttribute("data-wt-code");
+      const wtaxSel = document.getElementById("select-wtax-code");
+      if (wtaxCode && wtaxSel) {
+        wtaxSel.value = wtaxCode;
+      }
+    }
+    if (typeof recalculateInvoiceTotals === "function") {
+      recalculateInvoiceTotals();
+    }
+  }
+});
+
+async function loadVendorAddressesForInvoice(vendorCode) {
+  try {
+    const allAddresses = window.vendorAddressesCache || [];
+    const addresses = allAddresses
+      .filter(a => a.name === vendorCode)
+      .map(a => {
+        try {
+          const extra = JSON.parse(a.extra_data);
+          return {
+            address_code: a.code.split("::")[1] || a.code,
+            address_type: extra.address_type || "ship",
+            address_text: extra.address_text || "",
+            building: extra.building || "",
+            block: extra.block || "",
+            street: extra.street || "",
+            street_no: extra.street_no || "",
+            address2: extra.address2 || "",
+            address3: extra.address3 || "",
+            city: extra.city || "",
+            state: extra.state || "",
+            country: extra.country || "",
+            gst_regn_no: extra.gst_regn_no || "",
+            is_default: extra.is_default || false
+          };
+        } catch(e) { return null; }
+      })
+      .filter(a => a !== null);
+    
+    const shipSel = document.getElementById("select-ship-to-code");
+    const paySel = document.getElementById("select-pay-to-code");
+    const shipTxt = document.getElementById("ship-to-address-text");
+    const payTxt = document.getElementById("pay-to-address-text");
+
+    const formatAddress = (a) => {
+      const parts = [
+        a.address_text, a.building, a.block, a.street, a.street_no, 
+        a.address2, a.address3, a.city, a.state, a.country, 
+        (a.gst_regn_no ? `GSTIN: ${a.gst_regn_no}` : '')
+      ];
+      return parts.filter(p => p && p.trim() !== "").join(", ");
+    };
+
+    let defaultShip = "";
+    let defaultPay = "";
+    const vendorData = window.vendorsMap && window.vendorsMap[vendorCode];
+    if (vendorData && vendorData.extra_data) {
+      try {
+        const ve = typeof vendorData.extra_data === "string" ? JSON.parse(vendorData.extra_data) : vendorData.extra_data;
+        defaultShip = ve.ship_to_code || ve.ShipToDefault || "";
+        defaultPay = ve.pay_to_code || "";
+      } catch(e) {}
+    }
+
+    if (shipSel) {
+      let shipAddrs = addresses.filter(a => a.address_type === "ship");
+      if (shipAddrs.length === 0) shipAddrs = addresses;
+      
+      let selectedIndex = 0;
+      shipSel.innerHTML = `<option value="">-- Select Ship-To --</option>` + 
+        shipAddrs.map((a, i) => {
+          const isSel = (defaultShip && a.address_code === defaultShip) || (!defaultShip && a.is_default) || (i === 0 && !defaultShip && !shipAddrs.find(x => x.is_default));
+          if (isSel) selectedIndex = i + 1;
+          return `<option value="${a.address_code}" data-text="${formatAddress(a).replace(/"/g, '&quot;')}" ${isSel ? 'selected' : ''}>${a.address_code}${a.is_default ? ' (Default)' : ''}</option>`;
+        }).join("");
+      
+      shipSel.selectedIndex = selectedIndex;
+      if (shipSel.selectedIndex > 0 && shipTxt) {
+        shipTxt.value = shipSel.options[shipSel.selectedIndex].getAttribute("data-text") || "";
+      } else if (shipTxt) shipTxt.value = "";
+    }
+    
+    if (paySel) {
+      let payAddrs = addresses.filter(a => a.address_type === "pay");
+      if (payAddrs.length === 0) payAddrs = addresses;
+      
+      let selectedIndex = 0;
+      paySel.innerHTML = `<option value="">-- Select Pay-To --</option>` + 
+        payAddrs.map((a, i) => {
+          const isSel = (defaultPay && a.address_code === defaultPay) || (!defaultPay && a.is_default) || (i === 0 && !defaultPay && !payAddrs.find(x => x.is_default));
+          if (isSel) selectedIndex = i + 1;
+          return `<option value="${a.address_code}" data-text="${formatAddress(a).replace(/"/g, '&quot;')}" ${isSel ? 'selected' : ''}>${a.address_code}${a.is_default ? ' (Default)' : ''}</option>`;
+        }).join("");
+      
+      paySel.selectedIndex = selectedIndex;
+      if (paySel.selectedIndex > 0 && payTxt) {
+        payTxt.value = paySel.options[paySel.selectedIndex].getAttribute("data-text") || "";
+      } else if (payTxt) payTxt.value = "";
+    }
+  } catch (err) {
+    console.error("Failed to fetch vendor addresses", err);
+  }
+}
+
+// ── Admin Subtab: WHT Codes ─────────────────────────────────────────────
+
+async function renderAdminWtaxTable() {
+  try {
+    const res = await fetch("/admin/wtax-codes");
+    if (!res.ok) return;
+    const codes = await res.json();
+    const tbody = document.getElementById("admin-wtax-tbody");
+    if (!tbody) return;
+
+    if (codes.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-cell">No WHT / TDS codes found.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = codes.map(c => `
+      <tr>
+        <td><strong>${c.wtax_code}</strong></td>
+        <td>${c.description}</td>
+        <td><span class="pill gold">${c.wtax_rate.toFixed(2)}%</span></td>
+        <td><code>${c.wtax_type === 'G' ? 'Gross' : 'Net'}</code></td>
+        <td><span class="pill ${c.active ? 'success' : 'neutral'}">${c.active ? 'Active' : 'Inactive'}</span></td>
+        <td>
+          <button class="sap-btn outline" style="padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);" onclick="deleteWtaxCode('${c.wtax_code}')">🗑️ Delete</button>
+        </td>
+      </tr>
+    `).join("");
+  } catch (err) {
+    console.error("Failed to render WHT codes", err);
+  }
+}
+
+window.saveWtaxCode = async function() {
+  const code = document.getElementById("wtax-code-input").value;
+  const desc = document.getElementById("wtax-desc-input").value;
+  const rate = document.getElementById("wtax-rate-input").value;
+  const type = document.getElementById("wtax-type-input").value;
+  const active = document.getElementById("wtax-active-input").value;
+
+  if (!code) {
+    showToast("WTax Code is required", "warning");
+    return;
+  }
+
+  try {
+    const res = await fetch("/admin/wtax-codes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wtax_code: code, description: desc, wtax_rate: rate, wtax_type: type, active: active === "1" })
+    });
+    if (!res.ok) throw new Error("Failed to save WHT code");
+    showToast(`Saved WHT Code ${code}`, "success");
+    document.getElementById("wtax-code-input").value = "";
+    document.getElementById("wtax-desc-input").value = "";
+    document.getElementById("wtax-rate-input").value = "";
+    renderAdminWtaxTable();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+};
+
+window.deleteWtaxCode = async function(code) {
+  if (!confirm(`Delete WHT Code ${code}?`)) return;
+  try {
+    const res = await fetch(`/admin/wtax-codes?wtax_code=${encodeURIComponent(code)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete WHT code");
+    showToast(`Deleted WHT Code ${code}`, "info");
+    renderAdminWtaxTable();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+};
+
+// ── Admin Subtab: Vendor Addresses ────────────────────────────────────────
+
+async function populateAdminAddrVendorDropdown() {
+  try {
+    const res = await fetch("/master-data");
+    if (!res.ok) return;
+    const data = await res.json();
+    const sel = document.getElementById("addr-vendor-code-input");
+    if (sel && data.vendors) {
+      sel.innerHTML = `<option value="">-- Select Vendor --</option>` + 
+        data.vendors.map(v => `<option value="${v.code}">${v.code} — ${v.name}</option>`).join("");
+    }
+  } catch(e) {}
+}
+
+window.loadVendorAddressTable = async function() {
+  const sel = document.getElementById("addr-vendor-code-input");
+  const vendorCode = sel ? sel.value : "";
+  const tbody = document.getElementById("admin-addresses-tbody");
+  if (!tbody) return;
+
+  if (!vendorCode) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-cell">Select a vendor above to view addresses.</td></tr>`;
+    return;
+  }
+
+  try {
+    const res = await fetch(`/admin/vendor-addresses?vendor_code=${encodeURIComponent(vendorCode)}`);
+    if (!res.ok) return;
+    const addrs = await res.json();
+
+    if (addrs.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-cell">No addresses found for vendor ${vendorCode}.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = addrs.map(a => `
+      <tr>
+        <td><code>${a.vendor_code}</code></td>
+        <td><strong>${a.address_code}</strong></td>
+        <td><span class="pill ${a.address_type === 'pay' ? 'gold' : 'neutral'}">${a.address_type.toUpperCase()}</span></td>
+        <td style="white-space: pre-wrap; font-size: 0.8rem;">${a.address_text}</td>
+        <td>${a.is_default ? '<span class="pill success">⭐ Yes</span>' : 'No'}</td>
+        <td>
+          <button class="sap-btn outline" style="padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);" onclick="deleteVendorAddress('${a.vendor_code}', '${a.address_code}', '${a.address_type}')">🗑️ Delete</button>
+        </td>
+      </tr>
+    `).join("");
+  } catch (err) {
+    console.error("Failed to load vendor addresses", err);
+  }
+};
+
+window.saveVendorAddress = async function() {
+  const vCode = document.getElementById("addr-vendor-code-input").value;
+  const aCode = document.getElementById("addr-code-input").value;
+  const aType = document.getElementById("addr-type-input").value;
+  const aText = document.getElementById("addr-text-input").value;
+  const isDef = document.getElementById("addr-default-input").checked;
+
+  if (!vCode || !aCode) {
+    showToast("Vendor Code and Address Code are required", "warning");
+    return;
+  }
+
+  try {
+    const res = await fetch("/admin/vendor-addresses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vendor_code: vCode, address_code: aCode, address_type: aType, address_text: aText, is_default: isDef })
+    });
+    if (!res.ok) throw new Error("Failed to save vendor address");
+    showToast(`Saved Address ${aCode} for ${vCode}`, "success");
+    document.getElementById("addr-code-input").value = "";
+    document.getElementById("addr-text-input").value = "";
+    document.getElementById("addr-default-input").checked = false;
+    loadVendorAddressTable();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+};
+
+window.deleteVendorAddress = async function(vCode, aCode, aType) {
+  if (!confirm(`Delete ${aType.toUpperCase()} address '${aCode}' for vendor ${vCode}?`)) return;
+  try {
+    const res = await fetch(`/admin/vendor-addresses?vendor_code=${encodeURIComponent(vCode)}&address_code=${encodeURIComponent(aCode)}&address_type=${encodeURIComponent(aType)}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete vendor address");
+    showToast(`Deleted Address ${aCode}`, "info");
+    loadVendorAddressTable();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+};
+
+// Custom Searchable Dropdown Implementation
+function initCustomSearchableSelects() {
+  document.querySelectorAll(".sap-grid-table select, .sap-header-box select").forEach(select => {
+    if (select.dataset.searchableInitialized) return;
+
+    select.dataset.searchableInitialized = "true";
+    select.style.display = "none";
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "custom-searchable-select";
+    select.parentNode.insertBefore(wrapper, select);
+    wrapper.appendChild(select);
+
+    const display = document.createElement("div");
+    display.className = "custom-searchable-display";
+    wrapper.appendChild(display);
+
+    const dropdown = document.createElement("div");
+    dropdown.className = "custom-searchable-dropdown";
+    document.body.appendChild(dropdown);
+
+    const searchWrapper = document.createElement("div");
+    searchWrapper.className = "custom-searchable-search";
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.placeholder = "Search...";
+    searchWrapper.appendChild(searchInput);
+    dropdown.appendChild(searchWrapper);
+
+    const list = document.createElement("ul");
+    list.className = "custom-searchable-list";
+    dropdown.appendChild(list);
+
+    function updateDisplay() {
+      const selectedOpt = select.options[select.selectedIndex];
+      display.textContent = selectedOpt ? selectedOpt.textContent : "-- Select --";
+    }
+
+    function buildList() {
+      list.innerHTML = "";
+      Array.from(select.options).forEach((opt, index) => {
+        const li = document.createElement("li");
+        li.textContent = opt.textContent;
+        li.dataset.value = opt.value;
+        li.dataset.index = index;
+        if (opt.value === "__ADD_NEW__") li.className = "add-new";
+        
+        li.addEventListener("click", () => {
+          select.selectedIndex = index;
+          select.dispatchEvent(new Event("change", { bubbles: true }));
+          updateDisplay();
+          dropdown.classList.remove("open");
+        });
+        list.appendChild(li);
+      });
+      updateDisplay();
+    }
+
+    buildList();
+
+    const observer = new MutationObserver(buildList);
+    observer.observe(select, { childList: true });
+
+    display.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = dropdown.classList.contains("open");
+      document.querySelectorAll(".custom-searchable-dropdown").forEach(d => d.classList.remove("open"));
+      if (!isOpen) {
+        const rect = display.getBoundingClientRect();
+        dropdown.style.top = (rect.bottom + window.scrollY) + "px";
+        dropdown.style.left = (rect.left + window.scrollX) + "px";
+        dropdown.style.minWidth = rect.width + "px";
+        dropdown.style.width = "max-content";
+        
+        dropdown.classList.add("open");
+        searchInput.value = "";
+        Array.from(list.children).forEach(li => li.classList.remove("hidden"));
+        // Use a small timeout to prevent focus from triggering an immediate scroll close
+        setTimeout(() => {
+          searchInput.focus({ preventScroll: true });
+        }, 10);
+      }
+    });
+
+    searchInput.addEventListener("input", (e) => {
+      const term = e.target.value.toLowerCase();
+      Array.from(list.children).forEach(li => {
+        if (li.textContent.toLowerCase().includes(term)) {
+          li.classList.remove("hidden");
+        } else {
+          li.classList.add("hidden");
+        }
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!wrapper.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.remove("open");
+      }
+    });
+    
+    select.addEventListener("change", updateDisplay);
+  });
+}
+
+window.addEventListener("scroll", (e) => {
+  // Ignore scrolls that happen inside the dropdown itself
+  if (e.target && e.target.classList && e.target.classList.contains("custom-searchable-list")) return;
+  document.querySelectorAll(".custom-searchable-dropdown").forEach(d => d.classList.remove("open"));
+}, true);
+
+// Observe DOM for new selects
+const domObserver = new MutationObserver(mutations => {
+  let hasNewSelects = false;
+  mutations.forEach(m => {
+    if (m.addedNodes.length > 0) hasNewSelects = true;
+  });
+  if (hasNewSelects) initCustomSearchableSelects();
+});
+domObserver.observe(document.body, { childList: true, subtree: true });
+
+document.addEventListener("DOMContentLoaded", initCustomSearchableSelects);
+initCustomSearchableSelects();
+

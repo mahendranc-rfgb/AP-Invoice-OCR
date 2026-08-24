@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAP Business One OCR Extractor - User Manual</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      color: #333;
+      line-height: 1.6;
+      margin: 0;
+      padding: 2rem 4rem;
+      background: #fff;
+    }
+    h1, h2, h3, h4 { color: #111; }
+    h1 { border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 2rem; }
+    h2 { border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3rem; margin-top: 2.5rem; color: #2563eb; }
+    .page-break { page-break-before: always; }
+    .info-box { background: #f8fafc; border-left: 4px solid #2563eb; padding: 1rem; margin: 1rem 0; }
+    .warning-box { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 1rem; margin: 1rem 0; }
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+    th, td { border: 1px solid #e2e8f0; padding: 0.75rem; text-align: left; }
+    th { background: #f1f5f9; }
+    img { max-width: 100%; height: auto; border: 1px solid #cbd5e1; border-radius: 4px; margin: 1rem 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    code { background: #f1f5f9; padding: 0.2rem 0.4rem; border-radius: 3px; font-family: monospace; }
+    
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none !important; }
+      @page { margin: 1.5cm; }
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="no-print" style="margin-bottom: 2rem; padding: 1rem; background: #f1f5f9; border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+    <span>Click the button to save this manual as a PDF or print it.</span>
+    <button onclick="window.print()" style="background: #2563eb; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-weight: 600;">🖨️ Print / Save PDF</button>
+  </div>
+
+  <h1>SAP Business One OCR Extractor - User Manual</h1>
+  
+  <p><strong>Version:</strong> 1.0</p>
+  <p><strong>Date:</strong> July 2026</p>
+  
+  <div class="info-box">
+    <strong>Overview:</strong> The SAP Business One OCR Extractor is an AI-powered automation tool designed to eliminate manual data entry for Accounts Payable (A/P) invoices. It extracts data from scanned invoices or PDFs and automatically posts them to SAP Business One.
+  </div>
+
+  <h2>1. Dashboard Analytics</h2>
+  <p>The Dashboard is the landing page of the application, providing a high-level overview of system performance and extraction metrics.</p>
+  
+  <h3>Key Features:</h3>
+  <img src="/static/dash.png" alt="Dashboard Overview Screenshot" style="width: 100%; max-width: 800px; border-radius: 8px; margin: 15px 0;">
+  <ul>
+    <li><strong>Metric Cards:</strong> View total processed documents, extraction success rate, and pending reviews.</li>
+    <li><strong>Extraction Accuracy Trends:</strong> A line chart tracking the AI's OCR confidence over time.</li>
+    <li><strong>Processing Volume:</strong> A bar chart showing the number of invoices processed per day.</li>
+    <li><strong>Recent Activity:</strong> A live feed of the latest uploaded and posted invoices.</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>2. A/P Invoice Extraction</h2>
+  <p>This is the core functional area where users upload vendor invoices, review AI-extracted data, and post them to SAP Business One.</p>
+  <img src="/static/inv.png" alt="A/P Invoice Extraction Screenshot" style="width: 100%; max-width: 800px; border-radius: 8px; margin: 15px 0;">
+
+  <h3>Step-by-Step Workflow:</h3>
+  <ol>
+    <li><strong>Upload Invoice:</strong> Navigate to <em>A/P Invoice Extraction</em>. Click <strong>Browse File</strong> or drag and drop an invoice file (PDF, PNG, JPG). For bulk processing, select multiple files.</li>
+    <li><strong>AI Extraction:</strong> The system automatically extracts Header Data (Supplier, Date, Totals) and Line Items (Quantities, Prices, Tax Codes).</li>
+    <li><strong>Review & Validate (OCR Preview):</strong> The <strong>OCR Raw Text & Confidence</strong> sub-tab displays the original text and confidence badges. Low-confidence fields are flagged for manual review.</li>
+    <li><strong>Logistics & Tax:</strong> 
+      <ul>
+        <li>Switch to the <strong>Logistics</strong> tab to automatically load the vendor's Ship-To and Pay-To addresses.</li>
+        <li>Switch to the <strong>Tax & Compliance</strong> tab. If any line item is marked for Withholding Tax (WHT), select the appropriate TDS code. The system will auto-calculate the deduction.</li>
+      </ul>
+    </li>
+    <li><strong>Approve & Post:</strong> Once validated, click <strong>✅ Approve & Map</strong>, then <strong>SAP Post</strong>. The system generates a Service Layer JSON payload and creates the A/P Invoice in SAP.</li>
+  </ol>
+
+  <div class="warning-box">
+    <strong>Note:</strong> If the SAP posting fails, click the "View SAP Log" button to see the specific error returned by the SAP Service Layer.
+  </div>
+
+  <div class="page-break"></div>
+
+  <h2>3. Document Queue Management</h2>
+  <p>The Document Queue acts as a staging area for all uploaded invoices, tracking their lifecycle status.</p>
+
+  <h3>Status Workflow:</h3>
+  <ul>
+    <li><code>UNPOSTED</code>: Uploaded and extracted, awaiting review.</li>
+    <li><code>VALIDATED</code>: Business rules (like balancing totals) have passed.</li>
+    <li><code>APPROVED</code>: User has approved the data; ready for SAP posting.</li>
+    <li><code>POSTED</code>: Successfully posted to SAP (assigned a DocNum and DocEntry).</li>
+  </ul>
+  
+  <p>Use the <strong>Refresh Document Queue</strong> button to pull the latest statuses. You can click <strong>View / Edit</strong> on any row to open that invoice in the Extraction screen.</p>
+
+  <div class="page-break"></div>
+
+  <h2>4. Administration & Master Data</h2>
+  <p>The Admin portal is restricted to users with the <code>Administrator</code> role. It manages system settings, AI configuration, and Master Data synchronization.</p>
+
+  <h3>4.1 System & API Configuration</h3>
+  <p>Configure the connection to the SAP Business One Service Layer (URL, Company DB, Username, Password) and select the AI OCR Provider (e.g., NVIDIA Llama, OpenAI, Anthropic).</p>
+
+  <h3>4.2 Master Data Tables</h3>
+  <p>The system maintains local copies of SAP master data for rapid UI population. You can sync data directly from SAP or upload via Excel.</p>
+  <ul>
+    <li><strong>Vendors:</strong> Contains CardCode, GSTIN, Default Addresses, and WHT Liability settings.</li>
+    <li><strong>Items / Services:</strong> SAP Item Master data.</li>
+    <li><strong>WHT / TDS Codes:</strong> Defines withholding tax codes, rates, and calculation base.</li>
+    <li><strong>Vendor Addresses:</strong> Manages multiple Ship-To and Pay-To addresses for each vendor, used in the Logistics auto-fill feature.</li>
+  </ul>
+
+  <h3>4.3 Form Customization</h3>
+  <p>Enable, disable, or add new Custom Fields (UDFs) to the invoice form dynamically without writing code. These map directly to SAP Service Layer JSON properties.</p>
+
+  <h3>4.4 Validation Rules Engine</h3>
+  <p>The Validation Rules Engine allows you to create dynamic data governance policies to block invalid invoice postings before they reach SAP.</p>
+  <ul>
+    <li><strong>Rule Setup:</strong> Target any header or line-level field (e.g., <code>CardCode</code>, <code>DocTotal</code>).</li>
+    <li><strong>Conditions:</strong> Define logical conditions (e.g., <code>is_empty</code>, <code>equals</code>, <code>greater_than</code>) and set custom error messages.</li>
+    <li><strong>Enforcement:</strong> When a user attempts to approve or post an invoice, the engine evaluates all rules. If a rule fails, the posting is blocked and the error message is displayed to the user.</li>
+  </ul>
+
+  <div class="page-break"></div>
+
+  <h2>5. AI Model Training</h2>
+  <p>The AI Training module allows administrators to improve OCR accuracy by feeding historical data back into the AI engine.</p>
+
+  <h3>How it Works:</h3>
+  <ol>
+    <li><strong>Historical Sync:</strong> Click <strong>Sync from SAP API</strong> to download previously posted invoices.</li>
+    <li><strong>Diff Viewer:</strong> The system compares what the OCR <em>originally</em> extracted vs. what the user <em>actually</em> posted to SAP.</li>
+    <li><strong>Continuous Learning:</strong> By analyzing these corrections, the AI updates its extraction rules (e.g., learning that "Inv. No." means "Invoice Number" for a specific vendor).</li>
+  </ol>
+  
+  <p>The <strong>Training Accuracy Score</strong> gauge provides a visual indicator of the AI's current confidence level across all processed documents.</p>
+
+  <div class="page-break"></div>
+
+  <h2>6. Open Documents Synchronization</h2>
+  <p>The Open Documents module allows you to pull and view pending base documents directly from SAP, such as Open Purchase Orders and Goods Receipt POs.</p>
+
+  <h3>Using Open Documents:</h3>
+  <ol>
+    <li><strong>Sync from SAP:</strong> Navigate to the <em>Open Documents</em> tab. Click <strong>Sync Open POs</strong> or <strong>Sync Open GRPOs</strong> to fetch the latest documents from SAP.</li>
+    <li><strong>Filter & Search:</strong> Use the search bar or document type dropdown to quickly locate specific documents.</li>
+    <li><strong>Load into Form:</strong> Click <strong>Load into Form</strong> on any row. This securely transfers the document's header and grid line items (e.g., Cost Centers, Tax Codes) directly into the A/P Invoice Extraction form, providing a fast baseline for matching OCR data.</li>
+  </ol>
+
+  <hr style="margin-top: 3rem; border: none; border-top: 1px solid #e2e8f0;">
+  <p style="text-align: center; color: #64748b; font-size: 0.85rem;">© 2026 SAP Business One Integrations. All rights reserved.</p>
+
+  <script>
+    // Auto-trigger print if ?print=1 is in URL
+    if (window.location.search.includes('print=1')) {
+      window.onload = () => { setTimeout(() => window.print(), 500); };
+    }
+  </script>
+</body>
+</html>

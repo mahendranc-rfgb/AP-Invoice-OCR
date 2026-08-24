@@ -1,0 +1,1698 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAP Business One — A/P Invoice Posting Automation</title>
+  <link rel="stylesheet" href="/static/styles.css?v=1.0.7">
+  <link rel="stylesheet" href="/static/upload.css?v=1.0.7">
+  <link rel="stylesheet" href="/static/draft_modal.css?v=1.0.7">
+  <link rel="stylesheet" href="/static/ui_layout.css?v=1.0.7">
+</head>
+
+<body class="sap-b1-theme">
+  <!-- Top SAP Business One Application Bar -->
+  <header class="sap-topbar">
+    <div class="sap-logo-area">
+      <img id="app-navbar-logo" src="" style="display: none; height: 28px; margin-right: 10px; border-radius: 4px;"
+        alt="Logo">
+      <div class="sap-gold-square" id="app-navbar-default-logo">SAP</div>
+      <span class="sap-app-title" id="app-navbar-title">Business One <span>10.0 FP 2402</span></span>
+    </div>
+    <div class="sap-toolbar">
+      <span class="sap-status-badge" id="sap-connection-badge">
+        <i class="dot-green"></i> Service Layer Connected
+      </span>
+      <span class="sap-status-badge" id="user-role-badge" title="Click to log in"
+        style="background: rgba(234, 179, 8, 0.15); border-color: var(--sap-gold); color: var(--sap-gold); cursor: pointer;">
+        👤 Not Logged In
+      </span>
+      <button class="sap-btn outline" id="btn-logout"
+        style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);">🚪
+        Logout</button>
+      <button class="sap-btn-icon" title="Refresh Workspace" id="refresh">↻</button>
+      <a href="/manual?print=1" target="_blank" class="sap-btn outline"
+        style="padding: 0.2rem 0.5rem; margin-right: 0.5rem; font-size: 0.75rem; color: var(--sap-gold); border-color: var(--sap-gold); text-decoration: none;">📥
+        Download PDF Manual</a>
+      <a href="/docs" target="_blank" class="sap-btn-icon" title="API Docs">⌘ API</a>
+    </div>
+  </header>
+
+  <div class="sap-shell">
+    <!-- Left Navigation Bar -->
+    <aside class="sap-sidebar">
+      <div class="sidebar-section-title">Purchasing — A/P</div>
+      <nav>
+        <a class="sap-nav-link active" id="nav-dashboard" href="#dashboard" onclick="switchPage('dashboard')"><span
+            class="icon">📊</span> Executive Dashboard</a>
+        <a class="sap-nav-link" id="nav-invoice" href="#invoice" onclick="switchPage('invoice')"><span
+            class="icon">📄</span> A/P Invoice Entry</a>
+        <a class="sap-nav-link" id="nav-training" href="#training" onclick="switchPage('training')"><span
+            class="icon">🧠</span> AI Training Feedback</a>
+        <a class="sap-nav-link" id="nav-queue" href="#queue" onclick="switchPage('queue')"><span
+            class="icon">☷</span><span style="flex:1;white-space:nowrap;">Document Queue</span><b id="queue-count"
+            style="margin-left:auto;background:rgba(245,158,11,0.18);color:var(--sap-gold);font-size:0.72rem;font-weight:700;padding:0.1rem 0.45rem;border-radius:10px;border:1px solid rgba(245,158,11,0.35);line-height:1.6;">0</b></a>
+        <a class="sap-nav-link" id="nav-open-docs" href="#open-docs" onclick="switchPage('open-docs')"><span
+            class="icon">📋</span> Open Documents</a>
+        <a class="sap-nav-link" id="nav-admin" href="#admin" onclick="switchPage('admin')"><span class="icon">⚙️</span>
+          Admin &amp; Master Data</a>
+      </nav>
+
+      <div class="sidebar-metrics">
+        <div class="metric-box">
+          <span>Processed Today</span>
+          <strong id="metric-docs">0</strong>
+        </div>
+        <div class="metric-box">
+          <span>Passed Rules</span>
+          <strong id="metric-ready" style="color: var(--sap-gold);">0</strong>
+        </div>
+        <div class="metric-box">
+          <span>Needs Review</span>
+          <strong id="metric-review" style="color: var(--accent-rose);">0</strong>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="sap-main-workspace">
+      <!-- PAGE 0: EXECUTIVE DASHBOARD -->
+      <section id="page-dashboard" class="app-page active">
+        <!-- Dashboard Header / Welcome Banner -->
+        <div class="dash-welcome-banner"
+          style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid var(--border-color); border-radius: 10px; padding: 1.2rem 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+          <div>
+            <h1
+              style="margin: 0; font-size: 1.4rem; color: #fff; font-weight: 700; display: flex; align-items: center; gap: 0.5rem;">
+              <span>🚀 SAP B1 AI Invoice OCR Command Center</span>
+            </h1>
+            <p style="margin: 0.3rem 0 0 0; color: var(--text-dim); font-size: 0.85rem;">Real-time Executive Insights,
+              Extracted Document Queue, and Service Layer Posting Status</p>
+          </div>
+          <div style="display: flex; gap: 0.6rem;">
+            <button class="sap-btn gold" onclick="switchPage('invoice')">➕ New Invoice Entry</button>
+            <button class="sap-btn primary" onclick="switchPage('queue')">📋 View Queue</button>
+          </div>
+        </div>
+
+        <!-- 4 KPI Stat Cards Grid -->
+        <div
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.2rem; margin-bottom: 1.5rem;">
+          <div class="kpi-card"
+            style="background: var(--sap-panel-bg, #ffffff); border: 1px solid var(--border-color); border-left: 4px solid var(--sap-blue-brand); border-radius: 8px; padding: 1.1rem; transition: transform 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 600;">
+              <span>Total Processed Invoices</span>
+              <span style="font-size: 1.2rem;">📑</span>
+            </div>
+            <div id="dash-stat-total" style="font-size: 1.8rem; font-weight: 800; color: var(--text-main); margin: 0.4rem 0;">0
+            </div>
+            <div
+              style="font-size: 0.75rem; color: var(--sap-blue-brand); display: flex; align-items: center; gap: 0.3rem;">
+              <span>↑ 100% Ingested into Database</span>
+            </div>
+          </div>
+
+          <div class="kpi-card"
+            style="background: var(--sap-panel-bg, #ffffff); border: 1px solid var(--border-color); border-left: 4px solid var(--sap-gold); border-radius: 8px; padding: 1.1rem; transition: transform 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 600;">
+              <span>AI OCR Accuracy Precision</span>
+              <span style="font-size: 1.2rem;">🎯</span>
+            </div>
+            <div id="dash-stat-accuracy"
+              style="font-size: 1.8rem; font-weight: 800; color: var(--sap-gold); margin: 0.4rem 0;">98.4%</div>
+            <div style="font-size: 0.75rem; color: var(--sap-gold); display: flex; align-items: center; gap: 0.3rem;">
+              <span>Level 2 Supplier Memory Active</span>
+            </div>
+          </div>
+
+          <div class="kpi-card"
+            style="background: var(--sap-panel-bg, #ffffff); border: 1px solid var(--border-color); border-left: 4px solid var(--accent-emerald); border-radius: 8px; padding: 1.1rem; transition: transform 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 600;">
+              <span>Posted to SAP Business One</span>
+              <span style="font-size: 1.2rem;">✅</span>
+            </div>
+            <div id="dash-stat-posted"
+              style="font-size: 1.8rem; font-weight: 800; color: var(--accent-emerald); margin: 0.4rem 0;">0</div>
+            <div
+              style="font-size: 0.75rem; color: var(--accent-emerald); display: flex; align-items: center; gap: 0.3rem;">
+              <span>Service Layer DocNum Sync Active</span>
+            </div>
+          </div>
+
+          <div class="kpi-card"
+            style="background: var(--sap-panel-bg, #ffffff); border: 1px solid var(--border-color); border-left: 4px solid var(--sap-blue-brand); border-radius: 8px; padding: 1.1rem; transition: transform 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; color: var(--text-muted); font-size: 0.8rem; font-weight: 600;">
+              <span>Total Processed Invoice Value</span>
+              <span style="font-size: 1.2rem;">💰</span>
+            </div>
+            <div id="dash-stat-value"
+              style="font-size: 1.5rem; font-weight: 800; color: var(--sap-blue-brand); margin: 0.4rem 0;">INR 0.00</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.3rem;">
+              <span>Pre-Tax Subtotal + GST Tax Total</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dashboard Charts & Breakdown Grid -->
+        <div
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.2rem; margin-bottom: 1.5rem;">
+          <!-- Left Chart Panel: Document Queue Status Breakdown -->
+          <div class="sap-card" style="padding: 1.2rem;">
+            <div class="card-header" style="margin-bottom: 1rem;">
+              <h3>📊 Invoice Status Distribution</h3>
+              <span class="hint">Live Queue Breakdown</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.3rem;">
+                  <span>Posted to SAP (DocNum Assigned)</span>
+                  <strong style="color: var(--accent-emerald);" id="dash-bar-posted-text">0 (0%)</strong>
+                </div>
+                <div style="height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden;">
+                  <div id="dash-bar-posted"
+                    style="width: 0%; height: 100%; background: var(--accent-emerald); transition: width 0.4s ease;">
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.3rem;">
+                  <span>Validated &amp; Ready for Posting</span>
+                  <strong style="color: var(--sap-gold);" id="dash-bar-ready-text">0 (0%)</strong>
+                </div>
+                <div style="height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden;">
+                  <div id="dash-bar-ready"
+                    style="width: 0%; height: 100%; background: var(--sap-gold); transition: width 0.4s ease;"></div>
+                </div>
+              </div>
+
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.3rem;">
+                  <span>Needs Review / Manual Correction</span>
+                  <strong style="color: var(--accent-rose);" id="dash-bar-review-text">0 (0%)</strong>
+                </div>
+                <div style="height: 10px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden;">
+                  <div id="dash-bar-review"
+                    style="width: 0%; height: 100%; background: var(--accent-rose); transition: width 0.4s ease;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Chart Panel: Key Suppliers & Master Data Matching -->
+          <div class="sap-card" style="padding: 1.2rem;">
+            <div class="card-header" style="margin-bottom: 1rem;">
+              <h3>🏢 Active Vendors &amp; SAP Master Data Match</h3>
+              <span class="hint">Supplier Memory Status</span>
+            </div>
+            <div id="dash-vendors-list" style="display: flex; flex-direction: column; gap: 0.6rem;">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Invoices Queue Table -->
+        <div class="sap-card" style="padding: 1.2rem;">
+          <div class="card-header"
+            style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <h3>📋 Recent Active Queue Documents</h3>
+              <span class="hint">Click any document to load into SAP B1 Posting Window or view SAP Response Log</span>
+            </div>
+            <button class="sap-btn outline" onclick="switchPage('queue')"
+              style="padding: 0.3rem 0.7rem; font-size: 0.8rem;">View All Documents ➔</button>
+          </div>
+          <div class="sap-table-wrapper">
+            <table class="sap-grid-table mini" style="min-width: 900px;">
+              <thead>
+                <tr>
+                  <th>Vendor Ref / Inv #</th>
+                  <th>SAP Doc # (DocNum)</th>
+                  <th>Supplier (CardCode &amp; Name)</th>
+                  <th>Total Payment Due</th>
+                  <th>Tax Amount</th>
+                  <th>Status</th>
+                  <th>Quick Action</th>
+                </tr>
+              </thead>
+              <tbody id="dash-recent-tbody">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 1: A/P INVOICE ENTRY -->
+      <section id="page-invoice" class="app-page hidden">
+        <!-- Workflow Progress Stepper Bar -->
+        <div class="sap-stepper">
+          <div class="stepper-step active" id="step-pill-1"><span class="step-num">1</span> Scan / Upload Invoice
+            (Single or Bulk)</div>
+          <div class="stepper-step" id="step-pill-2"><span class="step-num">2</span> Validate Document</div>
+          <div class="stepper-step" id="step-pill-3"><span class="step-num">3</span> Authorize Draft</div>
+          <div class="stepper-step" id="step-pill-4"><span class="step-num">4</span> Post to SAP B1</div>
+        </div>
+
+        <!-- SAP B1 Window Container -->
+        <div class="sap-window" id="sap-invoice-window">
+          <!-- PAGE 1 SUB-TABS NAV BAR -->
+          <div class="subtabs-bar"
+            style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+            <button type="button" class="subtab-btn active" id="subtab-invoice-entry"
+              onclick="switchInvoiceSubtab('entry')">📄 Document Header &amp; Lines Grid</button>
+            <button type="button" class="subtab-btn" id="subtab-invoice-ocr" onclick="switchInvoiceSubtab('ocr')">🔍 OCR
+              Text &amp; Field Confidence</button>
+            <button type="button" class="subtab-btn" id="subtab-invoice-console"
+              onclick="switchInvoiceSubtab('console')">💻 Validation Output Console</button>
+          </div>
+
+          <!-- SUBTAB SECTION 1: Document Entry Form -->
+          <div id="invoice-subtab-entry-sec">
+            <div class="sap-card">
+              <!-- Header status banner -->
+              <div class="card-header border-bottom pb-3">
+                <div>
+                  <h2>A/P Invoice Entry (Service &amp; Item Document)</h2>
+                  <div class="sap-status-row">
+                    <span class="pill neutral" id="document-status-pill">Document Idle</span>
+                    <span class="pill neutral" id="extraction-status-pill">Ready for Upload</span>
+                    <span class="sap-doc-num" id="sap-doc-num">[Draft #New]</span>
+                  </div>
+                </div>
+
+                <!-- Upload Area -->
+                <div class="ocr-upload-zone" id="ocr-upload-zone">
+                  <input type="file" id="invoice-file-input" accept=".pdf,.png,.jpg,.jpeg,.tiff" multiple
+                    class="hidden">
+                  <input type="file" id="invoice-camera-input" accept="image/*" capture="environment" class="hidden">
+                  <div class="upload-controls"
+                    style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; align-items: center;">
+                    <button type="button" class="sap-btn gold" id="btn-browse-file">📁 Upload Single / Bulk
+                      Invoices</button>
+                    <button type="button" class="sap-btn outline" id="btn-take-photo">📷 Take Photo</button>
+                    <span class="upload-state" id="upload-state-text"
+                      style="width: 100%; text-align: center; margin-top: 0.5rem;">Drop single or multiple invoice files
+                      (PDF/Image) or click upload</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Document Preview Panel (stacked above form, full width) -->
+              <div id="doc-viewer-panel" class="hidden"
+                style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem; margin-top: 1rem;">
+                <div
+                  style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border-color);">
+                  <span
+                    style="font-weight: 700; font-size: 0.85rem; color: var(--sap-gold); display: flex; align-items: center; gap: 0.4rem;">
+                    📄 Uploaded Document Preview
+                  </span>
+                  <div style="display: flex; gap: 0.4rem;">
+                    <a id="btn-doc-external" href="#" target="_blank" class="sap-btn outline"
+                      style="padding: 0.2rem 0.5rem; font-size: 0.72rem; text-decoration: none; color: var(--accent-cyan); border-color: var(--accent-cyan);">↗
+                      Open Fullscreen</a>
+                    <button type="button" class="sap-btn outline"
+                      onclick="document.getElementById('doc-viewer-panel').classList.add('hidden')"
+                      style="padding: 0.2rem 0.5rem; font-size: 0.72rem; color: var(--text-dim);">✕ Hide Viewer</button>
+                  </div>
+                </div>
+                <div style="width: 100%; height: 450px; border-radius: 4px; overflow: hidden; background: #0f172a;">
+                  <iframe id="doc-viewer-frame" style="width: 100%; height: 100%; border: none;"
+                    src="about:blank"></iframe>
+                </div>
+              </div>
+
+              <!-- Invoice Entry Form (always full width below viewer) -->
+              <div id="doc-form-panel" style="margin-top: 1rem;">
+                <!-- SAP A/P Invoice Form -->
+                <form id="sap-invoice-form" class="mt-4">
+                  <!-- Clear Form Action Bar -->
+                  <div style="display: flex; justify-content: flex-end; margin-bottom: 0.8rem;">
+                    <button type="button" class="sap-btn outline" id="btn-clear-form"
+                      style="padding: 0.3rem 0.8rem; font-size: 0.8rem; color: var(--accent-rose); border-color: var(--accent-rose);">🧹
+                      Clear Form &amp; Reset Fields</button>
+                  </div>
+
+                  <!-- Header Input Section (2 Columns) -->
+                  <div class="sap-header-grid">
+                    <!-- Left Side: Vendor / Supplier Info -->
+                    <div class="sap-header-box">
+                      <div class="box-title">Vendor &amp; General Information</div>
+                      <div class="sap-field-row">
+                        <label
+                          style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 0.2rem;">
+                          <span>Vendor Code (CardCode)</span>
+                        </label>
+                        <div style="display: flex; gap: 0.5rem; width: 100%; min-width: 0; align-items: center;">
+                          <div style="flex: 1; min-width: 0;">
+                            <select name="sap_card_code" id="select-vendor-code" style="width: 100%;" required>
+                              <option value="">-- Select Vendor --</option>
+                            </select>
+                          </div>
+                          <button type="button" id="btn-copy-from-po" class="sap-btn primary"
+                            style="padding: 0.4rem 0.8rem; font-size: 0.75rem; flex-shrink: 0; white-space: nowrap;">📋
+                            Copy from PO</button>
+                        </div>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Vendor Name (CardName)</label>
+                        <input name="supplier_name" placeholder="Supplier Name" required>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Supplier GSTIN</label>
+                        <input name="supplier_gstin" placeholder="GSTIN Number (e.g. 33AAAAA0000A1Z5)">
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Vendor Ref / Invoice #</label>
+                        <input name="invoice_number" placeholder="Vendor Invoice Reference No." required>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>BP Currency</label>
+                        <select name="local_currency" id="select-currency">
+                          <option value="INR" selected>INR — Indian Rupee</option>
+                          <option value="USD">USD — US Dollar</option>
+                          <option value="EUR">EUR — Euro</option>
+                          <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...
+                          </option>
+                        </select>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Place of Supply / State Code</label>
+                        <select name="place_of_supply" id="select-place-of-supply">
+                          <option value="" selected>-- Select Place of Supply --</option>
+                          <option value="AP">AP — Andhra Pradesh</option>
+                          <option value="AR">AR — Arunachal Pradesh</option>
+                          <option value="AS">AS — Assam</option>
+                          <option value="BR">BR — Bihar</option>
+                          <option value="CG">CG — Chhattisgarh</option>
+                          <option value="CH">CH — Chandigarh</option>
+                          <option value="CN">CN — China</option>
+                          <option value="DE">DE — Germany</option>
+                          <option value="DL">DL — Delhi</option>
+                          <option value="GA">GA — Goa</option>
+                          <option value="GJ">GJ — Gujarat</option>
+                          <option value="HK">HK — Hong Kong</option>
+                          <option value="HP">HP — Himachal Pradesh</option>
+                          <option value="HR">HR — Haryana</option>
+                          <option value="JH">JH — Jharkhand</option>
+                          <option value="KL">KL — Kerala</option>
+                          <option value="KT">KT — Karnataka</option>
+                          <option value="LI">LI — Liangxi</option>
+                          <option value="MH">MH — Maharashtra</option>
+                          <option value="ML">ML — Meghalaya</option>
+                          <option value="MN">MN — Manipur</option>
+                          <option value="MP">MP — Madhya Pradesh</option>
+                          <option value="MZ">MZ — Mizoram</option>
+                          <option value="NL">NL — Nagaland</option>
+                          <option value="NZ">NZ — New Zealand</option>
+                          <option value="OD">OD — Odisha</option>
+                          <option value="PB">PB — Punjab</option>
+                          <option value="PY">PY — Puducherry</option>
+                          <option value="RJ">RJ — Rajasthan</option>
+                          <option value="SK">SK — Sikkim</option>
+                          <option value="TN">TN — Tamil Nadu</option>
+                          <option value="TR">TR — Tripura</option>
+                          <option value="TS">TS — Telangana</option>
+                          <option value="TW">TW — Taiwan</option>
+                          <option value="UAE">UAE — Dubai UAE</option>
+                          <option value="UP">UP — Uttar Pradesh</option>
+                          <option value="UT">UT — Uttrarakhand</option>
+                          <option value="WB">WB — West Bengal</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- Right Side: Posting Metadata & Dates -->
+                    <div class="sap-header-box">
+                      <div class="box-title">Document Dates &amp; Series</div>
+                      <div class="sap-field-row">
+                        <label>Posting Date (DocDate)</label>
+                        <input name="posting_date" type="date" required>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Due Date (DocDueDate)</label>
+                        <input name="due_date" type="date" required>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Document Date (TaxDate)</label>
+                        <input name="document_date" type="date" required>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Invoice Date</label>
+                        <input name="invoice_date" type="date" required>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Series</label>
+                        <select name="series" id="select-series">
+                          <option value="521">Primary Series (521)</option>
+                          <option value="522">Manual Series (522)</option>
+                          <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...
+                          </option>
+                        </select>
+                      </div>
+                      <div class="sap-field-row">
+                        <label>Branch (BPL_ID)</label>
+                        <select name="bpl_id_assigned_to_invoice" id="select-branch">
+                          <option value="1">1 — Primary Branch (Tamil Nadu)</option>
+                          <option value="2">2 — Secondary Branch</option>
+                          <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- SAP Window Tabs Bar -->
+                  <div class="sap-tabs-bar">
+                    <button type="button" class="sap-tab active" data-sap-tab="contents">Contents (Lines Grid)</button>
+                    <button type="button" class="sap-tab" data-sap-tab="logistics">Logistics</button>
+                    <button type="button" class="sap-tab" data-sap-tab="accounting">Accounting</button>
+                    <button type="button" class="sap-tab" data-sap-tab="tax">Tax &amp; Compliance</button>
+                  </div>
+
+                  <!-- PANEL 1: Contents (Lines Grid) -->
+                  <div id="sap-tab-panel-contents" class="sap-tab-panel">
+                    <div class="table-top-bar">
+                      <div class="type-switcher" style="display: flex; align-items: center; gap: 1rem;">
+                        <div>
+                          <label>DocType:</label>
+                          <select name="item_service_type">
+                            <option value="Service">dDocument_Service</option>
+                            <option value="Item">dDocument_Item</option>
+                          </select>
+                        </div>
+                        <div class="line-actions" style="display: flex; gap: 0.4rem;">
+                          <button type="button" class="sap-btn outline" id="btn-add-line"
+                            style="padding: 0.2rem 0.6rem; font-size: 0.78rem;">➕ Add Row</button>
+                          <button type="button" class="sap-btn outline" id="btn-dup-line"
+                            style="padding: 0.2rem 0.6rem; font-size: 0.78rem;">📋 Duplicate Row</button>
+                          <button type="button" class="sap-btn outline" id="btn-del-line"
+                            style="padding: 0.2rem 0.6rem; font-size: 0.78rem; color: var(--accent-rose); border-color: var(--accent-rose);">🗑️
+                            Delete Row</button>
+                        </div>
+                      </div>
+                      <span class="table-hint">AP Service Invoice Posting Grid (Includes CostingCode 1, 2, 3)</span>
+                    </div>
+
+                    <div class="sap-table-wrapper">
+                      <table class="sap-grid-table" id="grid-table-lines">
+                        <thead>
+                          <tr>
+                            <th style="width: 35px;">#</th>
+                            <th style="width: 200px;">Description</th>
+                            <th style="width: 130px;">ItemCode (SAP)</th>
+                            <th style="width: 140px;">AccountCode (G/L)</th>
+                            <th style="width: 180px;">SACEntry</th>
+                            <th style="width: 60px;">Qty</th>
+                            <th style="width: 95px;">UnitPrice (Price)</th>
+                            <th style="width: 65px;">GST %</th>
+                            <th style="width: 110px;">TaxCode</th>
+                            <th style="width: 95px;">WTax Liable</th>
+                            <th style="width: 120px;">LocationCode</th>
+                            <th style="width: 130px;">CostingCode (Cost Ctr 1)</th>
+                            <th style="width: 130px;">CostingCode2 (Cost Ctr 2)</th>
+                            <th style="width: 130px;">CostingCode3 (Cost Ctr 3)</th>
+                            <th style="width: 110px;">Line Total</th>
+                            <th style="width: 45px;">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr class="selected-row">
+                            <td class="cell-center row-num">0</td>
+                            <td><input name="description" placeholder="Description" required></td>
+                            <td>
+                              <select name="sap_item_code">
+                                <option value="">-- ItemCode --</option>
+                                <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add
+                                  New...</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select name="gl_account" class="gl-account-select" style="width: 100%;">
+                                <option value="">-- GL Account --</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select name="sac_entry">
+                                <option value="">-- SAC --</option>
+                                <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add
+                                  New...</option>
+                              </select>
+                            </td>
+                            <td><input name="quantity" type="number" value="1" min="0.001" step="0.001"></td>
+                            <td><input name="unit_price" type="number" placeholder="Price" min="0" step="0.01"></td>
+                            <td><input name="tax_percentage" type="number" value="0" min="0" step="0.01"></td>
+                            <td>
+                              <select name="tax_code">
+                                <option value="">-- Tax Code --</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select name="wtax_liable">
+                                <option value="tNO">No</option>
+                                <option value="tYES" selected>Yes</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select name="location_code">
+                                <option value="">-- Location --</option>
+                                <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add
+                                  New...</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select name="costing_code">
+                                <option value="">-- Cost Center --</option>
+                                <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add
+                                  New...</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select name="costing_code2">
+                                <option value="">-- Cost Center 2 --</option>
+                                <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add
+                                  New...</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select name="costing_code3">
+                                <option value="">-- Cost Center 3 --</option>
+                                <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add
+                                  New...</option>
+                              </select>
+                            </td>
+                            <td class="cell-readonly line-total-cell">INR 0.00</td>
+                            <td><button type="button" class="btn-remove-row"
+                                style="color: var(--accent-rose); background: none; border: none; font-size: 1.1rem; cursor: pointer;">×</button>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <!-- PANEL 2: Logistics (Matching SAP B1 Screenshot 2) -->
+                  <div id="sap-tab-panel-logistics" class="sap-tab-panel hidden"
+                    style="padding: 1.2rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 1.2rem;">
+                    <h4 style="color: var(--sap-gold); margin-bottom: 0.8rem; font-size: 0.95rem;">🚚 Logistics &amp;
+                      Shipping Details</h4>
+
+                    <!-- Ship To Section -->
+                    <div
+                      style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;">
+                      <div>
+                        <label style="font-weight: 700; color: #fff; display: block; margin-bottom: 0.3rem;">Ship To
+                          Address (Address2)</label>
+                        <textarea id="ship-to-address-text" name="ship_to_address" rows="4"
+                          style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg); border: 1px solid var(--border-color); color: #fff; border-radius: 4px; font-family: inherit; font-size: 0.85rem;"
+                          placeholder="Auto-populated from Vendor Master when vendor is selected..."></textarea>
+                      </div>
+                      <div>
+                        <label style="font-weight: 700; color: #fff; display: block; margin-bottom: 0.3rem;">Pay To
+                          (PayToCode)</label>
+                        <select id="select-pay-to-code" name="pay_to_code"
+                          style="width: 100%; padding: 0.45rem; margin-bottom: 0.8rem; background: var(--sap-input-bg); border: 1px solid var(--border-color); color: #fff; border-radius: 4px; font-size: 0.85rem;">
+                          <option value="">-- Select Pay To Address --</option>
+                        </select>
+                        <label style="font-weight: 700; color: #fff; display: block; margin-bottom: 0.3rem;">Pay To
+                          Address (Address)</label>
+                        <textarea id="pay-to-address-text" name="pay_to_address" rows="3"
+                          style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg); border: 1px solid var(--border-color); color: #fff; border-radius: 4px; font-family: inherit; font-size: 0.85rem;"
+                          placeholder="Auto-populated from Vendor Master when vendor is selected..."></textarea>
+                      </div>
+                    </div>
+
+                    <div
+                      style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.2rem; margin-top: 1.2rem;">
+                      <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem;">Shipping Type
+                          (TransportationCode)</label>
+                        <select name="transportation_code" style="width: 100%; padding: 0.45rem;">
+                          <option value="">-- Select Shipping Type --</option>
+                          <option value="1">1 — Motor Express / Road Transport</option>
+                          <option value="2">2 — Air Freight / Express Courier</option>
+                          <option value="3">3 — Sea Freight / Cargo Container</option>
+                          <option value="4">4 — Rail Transport</option>
+                        </select>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 0.6rem; margin-top: 1.4rem;">
+                        <input type="checkbox" id="use-pay-to-tax" name="use_pay_to_tax"
+                          style="width: 17px; height: 17px; cursor: pointer;">
+                        <label for="use-pay-to-tax" style="font-size: 0.82rem; color: #cbd5e1; cursor: pointer;">Use Pay
+                          to Address to Determine Tax</label>
+                      </div>
+                    </div>
+                    <p style="font-size:0.75rem; color:var(--text-dim); margin-top:0.7rem;">💡 Ship-To and Pay-To
+                      addresses auto-populate from Vendor Master. Manage vendor addresses in <strong>Admin → Vendor
+                        Addresses</strong> tab.</p>
+                  </div>
+
+                  <!-- PANEL 3: Accounting (Matching SAP B1 Screenshot 1) -->
+                  <div id="sap-tab-panel-accounting" class="sap-tab-panel hidden"
+                    style="padding: 1.2rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 1.2rem;">
+                    <h4 style="color: var(--sap-gold); margin-bottom: 0.8rem; font-size: 0.95rem;">💼 Accounting &amp;
+                      Payment Details</h4>
+                    <div
+                      style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.2rem;">
+                      <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem;">Journal Remark
+                          (JournalMemo)</label>
+                        <input name="journal_memo" placeholder="e.g. A/P Invoices - V01000"
+                          style="width: 100%; padding: 0.45rem;">
+                      </div>
+                      <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem;">Control Account
+                          (ControlAccount)</label>
+                        <select name="control_account" id="select-control-account"
+                          style="width: 100%; padding: 0.45rem;">
+                          <option value="2201001">2201001 — SUNDRY CREDITORS</option>
+                          <option value="2201002">2201002 — TRADE PAYABLES LOCAL</option>
+                          <option value="2201003">2201003 — TRADE PAYABLES IMPORT</option>
+                          <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...
+                          </option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem;">Payment Terms
+                          (PaymentGroupCode)</label>
+                        <select name="payment_group_code" style="width: 100%; padding: 0.45rem;">
+                          <option value="10">Net - 15 (15 Days)</option>
+                          <option value="1">Net - 30 (30 Days)</option>
+                          <option value="2">Net - 45 (45 Days)</option>
+                          <option value="3">Net - 60 (60 Days)</option>
+                          <option value="-1">Due Immediately / Cash</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem;">Payment Method
+                          (PaymentMethod)</label>
+                        <select name="payment_method" style="width: 100%; padding: 0.45rem;">
+                          <option value="">-- Select Payment Method --</option>
+                          <option value="OUT_NEFT">NEFT / RTGS Bank Transfer</option>
+                          <option value="OUT_CHEQUE">Account Payee Cheque</option>
+                          <option value="OUT_CASH">Cash Payment</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem;">Central Bank Ind.
+                          (CentralBankIndicator)</label>
+                        <input name="central_bank_indicator" placeholder="Central Bank Indicator"
+                          style="width: 100%; padding: 0.45rem;">
+                      </div>
+
+                      <div style="display: flex; align-items: center; gap: 0.6rem; margin-top: 1.4rem;">
+                        <input type="checkbox" id="payment-block" name="payment_block"
+                          style="width: 17px; height: 17px; cursor: pointer;">
+                        <label for="payment-block" style="font-size: 0.82rem; color: #cbd5e1; cursor: pointer;">Payment
+                          Block</label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- PANEL 4: Tax & Compliance -->
+                  <div id="sap-tab-panel-tax" class="sap-tab-panel hidden"
+                    style="padding: 1.2rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 1.2rem;">
+                    <h4 style="color: var(--sap-gold); margin-bottom: 0.8rem; font-size: 0.95rem;">⚖️ Tax &amp; GST
+                      Compliance</h4>
+                    <div
+                      style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.2rem;">
+                      <div>
+                        <label style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem;">VAT / GST Registration
+                          No</label>
+                        <input name="vat_reg_num" placeholder="VAT / GST Registration No"
+                          style="width: 100%; padding: 0.45rem;">
+                      </div>
+                    </div>
+
+                    <!-- WithHolding Tax (TDS) Section -->
+                    <div style="border-top: 1px dashed rgba(245,158,11,0.3); margin-top: 1.2rem; padding-top: 1.2rem;">
+                      <h5
+                        style="color: var(--sap-gold); font-size: 0.9rem; margin-bottom: 0.8rem; display:flex; align-items:center; gap:0.5rem;">
+                        🏛️ WithHolding Tax (TDS) — Document Level</h5>
+
+                      <!-- Alert banner shown when any line has WTax = Yes -->
+                      <div id="wtax-alert-banner" class="hidden"
+                        style="background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4); border-radius: 6px; padding: 0.65rem 1rem; margin-bottom: 1rem; display:flex; align-items:center; gap:0.6rem; font-size:0.83rem; color: var(--sap-gold);">
+                        <span style="font-size:1.1rem;">⚠️</span>
+                        <span>One or more line items have <strong>WTax Liable = Yes</strong>. Select the applicable WHT
+                          / TDS code below to apply to this document.</span>
+                      </div>
+
+                      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; align-items: end;">
+                        <div>
+                          <label
+                            style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: var(--text-muted);">WTax
+                            Code (WTCode) — Select TDS Category</label>
+                          <select id="select-wtax-code" name="wt_code"
+                            style="width: 100%; padding: 0.45rem; background: var(--sap-input-bg); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;"
+                            onchange="onWtaxCodeChange()">
+                            <option value="">-- Select WHT Code --</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label
+                            style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: var(--text-muted);">WHT
+                            Rate %</label>
+                          <input id="wtax-rate-display" readonly placeholder="Auto from code"
+                            style="width: 100%; padding: 0.45rem; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); color: var(--sap-gold); font-weight: 700; border-radius: 4px; text-align:right;">
+                        </div>
+                        <div>
+                          <label
+                            style="display: block; font-size: 0.8rem; margin-bottom: 0.3rem; color: var(--text-muted);">Calculated
+                            WTax Amount (INR)</label>
+                          <input id="wtax-amount-display" readonly placeholder="Calculated"
+                            style="width: 100%; padding: 0.45rem; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); color: var(--accent-emerald); font-weight: 700; border-radius: 4px; text-align:right;">
+                        </div>
+                      </div>
+                      <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.6rem;">💡 WTax Amount = (Total
+                        Subtotal × WTax Rate%) — deducted from payment to vendor and remitted to tax authorities.</p>
+                    </div>
+                  </div>
+
+                  <!-- SAP Footer Section: Remarks Left + Financial Totals Stack Right -->
+                  <div class="sap-footer-grid">
+                    <!-- Left Side: Comments / Remarks -->
+                    <div class="sap-comments-box">
+                      <label>GST Transaction Type</label>
+                      <select name="transaction_type"
+                        style="margin-bottom: 0.4rem; padding: 0.35rem 0.5rem; width: 100%;">
+                        <option value="gsttrantyp_GSTTaxInvoice">GST Tax Invoice</option>
+                        <option value="gsttrantyp_BillOfSupply" selected>Bill of Supply</option>
+                        <option value="gsttrantyp_GSTDebitMemo">GST Debit Memo</option>
+                        <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...
+                        </option>
+                      </select>
+                      <label style="margin-top: 0.4rem;">Remarks</label>
+                      <textarea name="comments" rows="2">Created through AI OCR Automation</textarea>
+                    </div>
+
+                    <!-- Right Side: SAP Totals Stack -->
+                    <div class="sap-totals-stack">
+                      <div class="total-row"><span>Total Before Discount:</span><strong id="footer-subtotal">INR
+                          0.00</strong></div>
+                      <div class="total-row"><span>Discount %:</span><span>0.00 %</span></div>
+                      <div class="total-row"><span>Freight:</span><span>0.00</span></div>
+                      <div class="total-row"><span>Tax Amount:</span><strong id="footer-tax">INR 0.00</strong></div>
+                      <div class="total-row" id="row-wtax-amount"
+                        style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 0.2rem;"><span>WTax
+                          Amount:</span><strong id="footer-wtax-amount" style="color: var(--sap-gold);">INR
+                          0.00</strong></div>
+                      <div class="total-row"><span>Round-Off Amount:</span><input type="number" step="0.01"
+                          id="footer-roundoff" name="rounding_amount" value="0.00"
+                          style="width: 85px; padding: 0.15rem 0.4rem; text-align: right; background: var(--sap-input-bg); border: 1px solid var(--border-color); color: var(--sap-gold); font-weight: bold; border-radius: 3px;">
+                      </div>
+                      <div class="total-row grand-total"><span>Total Payment Due:</span><strong
+                          id="footer-grand-total">INR 0.00</strong></div>
+                    </div>
+                  </div>
+
+                  <!-- SAP Action Buttons Bar (Consolidated 3-Step Workflow) -->
+                  <div class="sap-action-bar">
+                    <button class="sap-btn primary" type="submit" id="btn-unified-validate">1. Validate Document
+                      ➔</button>
+                    <button class="sap-btn accent" type="button" id="btn-approve">2. Authorize Draft</button>
+                    <button class="sap-btn primary-glow" type="button" id="btn-draft">3. Post Draft to SAP B1</button>
+                  </div>
+              </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBTAB SECTION 2: OCR Preview -->
+        <div id="invoice-subtab-ocr-sec" class="hidden">
+          <div class="sap-card" id="ocr-preview">
+            <div class="card-header">
+              <h3>🔍 Raw OCR Extraction &amp; Field Confidence Scores</h3>
+              <button class="sap-btn outline" id="btn-show-ocr-text">Toggle Raw Text View</button>
+            </div>
+            <div class="ocr-confidence-badges" id="ocr-confidence-badges" style="margin-bottom: 0.8rem;"></div>
+            <pre class="ocr-text-box hidden" id="ocr-text-box"></pre>
+          </div>
+        </div>
+
+        <!-- SUBTAB SECTION 3: Console Output -->
+        <div id="invoice-subtab-console-sec" class="hidden">
+          <div class="sap-card">
+            <div class="sap-console" id="result">
+              <div class="console-title">Business Rule Engine Output Console</div>
+              <p>Create an invoice or verify fields to run the validation engine.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 2: AI TRAINING FEEDBACK -->
+      <section id="page-training" class="app-page hidden">
+        <div class="sap-card">
+          <div class="card-header">
+            <h3>🧠 AI Model Training &amp; Feedback Loop (OCR vs SAP Posted Comparison)</h3>
+            <button class="sap-btn outline" id="btn-refresh-history">Refresh Memory History</button>
+          </div>
+          <div class="training-grid">
+            <div class="score-card">
+              <span>Accuracy Precision Score</span>
+              <div class="score-number" id="training-accuracy-score">--%</div>
+              <p id="training-score-label">Posting a draft SAP invoice calculates accuracy deltas and trains Level 2
+                mapping memory.</p>
+            </div>
+            <div class="diff-card" id="training-diff-viewer">
+              <div class="diff-placeholder">
+                <p>Compare initial raw OCR extraction against final posted SAP payload to record supplier and item
+                  memory corrections.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="history-section" style="margin-top: 1.5rem;">
+            <div class="history-title" style="margin-bottom: 0.8rem;">Saved AI Supplier &amp; Item Mapping Memory &amp;
+              Posted Field Parameters</div>
+            <div class="sap-table-wrapper">
+              <table class="sap-grid-table mini" style="min-width: 1000px;">
+                <thead>
+                  <tr>
+                    <th>Log ID</th>
+                    <th>Supplier Name</th>
+                    <th>Field Name / Mapped Item</th>
+                    <th>JSON Request Payload Value (Sent)</th>
+                    <th>SAP Response Field Value (Captured)</th>
+                    <th>Log Type</th>
+                    <th>Variance &amp; AI Training Status</th>
+                    <th>Recorded Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody id="history-tbody">
+                  <tr>
+                    <td colspan="8" class="empty-cell">No historical mapping corrections recorded yet.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 3: DOCUMENT QUEUE -->
+      <section id="page-queue" class="app-page hidden">
+        <div class="sap-card">
+          <div class="card-header"
+            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div>
+              <h3 style="margin: 0;">☷ Active Document Queue &amp; SAP Post Log</h3>
+              <span class="hint">Filter and select documents to view details or load into SAP B1 Posting Window</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <label style="font-size: 0.8rem; color: var(--text-dim); font-weight: 600;">Filter Status:</label>
+              <select id="queue-status-filter"
+                style="padding: 0.35rem 0.7rem; background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; border-radius: 4px; font-size: 0.82rem;">
+                <option value="all">All Documents (All Statuses)</option>
+                <option value="POSTED">✅ Posted to SAP (DocNum Assigned)</option>
+                <option value="unposted">⏳ Unposted / Pending Queue</option>
+                <option value="APPROVED">APPROVED (Ready for SAP Post)</option>
+                <option value="VALIDATED">VALIDATED (Passed Business Rules)</option>
+                <option value="NEEDS_REVIEW">NEEDS_REVIEW (Manual Review)</option>
+              </select>
+            </div>
+          </div>
+          <div class="sap-table-wrapper">
+            <table class="sap-grid-table">
+              <thead>
+                <tr>
+                  <th>Vendor Ref / Inv #</th>
+                  <th>SAP Doc # (DocNum)</th>
+                  <th>SAP DocEntry</th>
+                  <th>Supplier (CardCode &amp; Name)</th>
+                  <th>Total Payment Due</th>
+                  <th>Tax Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="documents">
+                <tr>
+                  <td colspan="8" class="empty-cell">No active documents in queue.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE: OPEN DOCUMENTS -->
+      <section id="page-open-docs" class="app-page hidden">
+        <div class="sap-card">
+          <div class="card-header" style="margin-bottom: 1rem; display: flex; flex-direction: column; gap: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 style="margin: 0;">📋 Open PO &amp; GRN Queue</h3>
+                <span class="hint">Select an open document to load it directly into the A/P Invoice form.</span>
+              </div>
+              <div style="display: flex; gap: 0.5rem;">
+                <button class="sap-btn primary" id="btn-sync-open-pos" onclick="syncOpenDocsFromSAP('PO')"
+                  style="padding: 0.5rem 1rem;">🔄 Sync POs</button>
+                <button class="sap-btn primary" id="btn-sync-open-grns" onclick="syncOpenDocsFromSAP('GRN')"
+                  style="padding: 0.5rem 1rem;">🔄 Sync GRNs</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <select id="filter-doc-type" class="sap-input" style="width: 150px; padding: 0.35rem 0.5rem;"
+                onchange="filterOpenDocs()">
+                <option value="">All Types</option>
+                <option value="PO">Purchase Order</option>
+                <option value="GRN">GRN</option>
+              </select>
+              <input type="text" id="search-open-docs" class="sap-input"
+                placeholder="Search by Doc Num, Vendor Code, etc..." style="width: 100%; max-width: 400px;"
+                onkeyup="filterOpenDocs()">
+            </div>
+          </div>
+          <div class="sap-table-wrapper" style="max-height: 60vh; overflow-y: auto;">
+            <table class="sap-grid-table" id="all-open-docs-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Doc Num</th>
+                  <th>Vendor Code</th>
+                  <th>Doc Date</th>
+                  <th>Total</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="all-open-docs-tbody">
+                <tr>
+                  <td colspan="6" class="empty-cell">Loading open documents...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 4: ADMIN PAGE -->
+      <section id="page-admin" class="app-page hidden">
+        <!-- ADMIN PAGE SUB-TABS NAV BAR -->
+        <div class="subtabs-bar"
+          style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+          <button type="button" class="subtab-btn active" id="subtab-admin-config"
+            onclick="switchAdminSubtab('config')">⚙️ System Config</button>
+          <button type="button" class="subtab-btn" id="subtab-admin-master" onclick="switchAdminSubtab('master')">🛠️
+            Master Data Tables</button>
+          <button type="button" class="subtab-btn" id="subtab-admin-form" onclick="switchAdminSubtab('form')">📋 Form
+            Settings Customizer</button>
+          <button type="button" class="subtab-btn" id="subtab-admin-validations"
+            onclick="switchAdminSubtab('validations')">🛡️ Validation Rules Engine</button>
+          <button type="button" class="subtab-btn" id="subtab-admin-users" onclick="switchAdminSubtab('users')">👥
+            Portal Users &amp; Passwords</button>
+          <button type="button" class="subtab-btn" id="subtab-admin-ai" onclick="switchAdminSubtab('ai')">🤖 AI Model
+            System Prompt</button>
+          <button type="button" class="subtab-btn" id="subtab-admin-training" onclick="switchAdminSubtab('training')">🎓
+            AI Model Training &amp; Dataset Onboarding</button>
+        </div>
+
+        <!-- ADMIN SUBTAB: AI Model Training & Dataset Onboarding -->
+        <div id="admin-subtab-training-sec" class="hidden">
+          <div class="sap-card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <h3>🎓 AI Model Training &amp; Historical Dataset Onboarding</h3>
+              <span class="pill gold">Client Onboarding Tool</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem;">
+              Train and seed the AI Mapping Engine for new clients using historical AP invoice datasets (Excel/CSV/JSON)
+              or by syncing directly from SAP Business One posted invoices.
+            </p>
+
+            <!-- AI Training Stats Strip -->
+            <div
+              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+              <div class="metric-box">
+                <span>Total Training Records</span>
+                <strong id="ai-stat-total">0</strong>
+              </div>
+              <div class="metric-box">
+                <span>Learned Vendor Rules</span>
+                <strong id="ai-stat-vendors" style="color: var(--sap-gold);">0</strong>
+              </div>
+              <div class="metric-box">
+                <span>Learned Item Rules</span>
+                <strong id="ai-stat-items" style="color: var(--accent-emerald);">0</strong>
+              </div>
+              <div class="metric-box">
+                <span>Learned G/L Account Rules</span>
+                <strong id="ai-stat-gl" style="color: var(--sap-blue-brand);">0</strong>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem;">
+              <!-- Bulk File Training Card -->
+              <div
+                style="background: var(--sap-panel-bg, #ffffff); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1.25rem;">
+                <h4 style="color: var(--sap-gold); margin-bottom: 0.5rem;">1. Bulk Historical Dataset File Upload</h4>
+                <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
+                  Upload Excel (<code>.xlsx</code>), CSV, or JSON containing historical posted invoices to automatically
+                  train CardCode, ItemCode, and Expense G/L account mappings.
+                </p>
+                <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                  <input type="file" id="ai-dump-file-input" accept=".xlsx,.xls,.csv,.json" style="display: none;">
+                  <button type="button" class="sap-btn primary" id="btn-browse-dump-file">📂 Browse Dump File</button>
+                  <button type="button" class="sap-btn gold" id="btn-upload-dump-train">📤 Train AI Model</button>
+                </div>
+                <span id="ai-dump-file-name"
+                  style="display: block; font-size: 0.78rem; color: var(--text-dim); margin-top: 0.6rem;">No file
+                  selected</span>
+              </div>
+
+              <!-- SAP Historical API Training Card -->
+              <div
+                style="background: var(--sap-panel-bg, #ffffff); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1.25rem;">
+                <h4 style="color: var(--sap-blue-brand); margin-bottom: 0.5rem;">2. Live SAP B1 Historical Invoices API
+                  Sync</h4>
+                <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;">
+                  Automatically query posted AP Invoices (<code>OPCH</code> / <code>PCH1</code>) directly from SAP
+                  Service Layer API to train the AI model.
+                </p>
+                <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+                  <input type="number" id="ai-sap-history-top" value="100" min="10" max="500"
+                    style="width: 80px; padding: 0.4rem; font-size: 0.8rem;" placeholder="Count">
+                  <button type="button" class="sap-btn primary" id="btn-sync-sap-history-train">⚡ Sync &amp; Train from
+                    SAP API</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUBTAB 1: System Config -->
+        <div id="admin-subtab-config-sec">
+          <div class="sap-card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <h3>⚙️ System Configuration Panel</h3>
+              <span class="pill success">Service Layer Ready</span>
+            </div>
+
+            <form id="admin-config-form" style="margin-top: 1rem;">
+              <div
+                style="font-weight: 700; color: var(--sap-gold); margin-bottom: 0.6rem; font-size: 0.88rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 0.3rem;">
+                1. SAP Service Layer Credentials</div>
+              <div class="admin-config-grid"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; padding: 0.5rem 0 1rem 0;">
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">SAP
+                    Service Layer Base URL</label>
+                  <input id="cfg-input-url" placeholder="https://rain.rfgb.net:50000/b1s/v1" required
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-family: var(--font-mono); font-size: 0.82rem;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">SAP
+                    Company DB Name</label>
+                  <input id="cfg-input-company" placeholder="LLM__TESTNEW" required
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-weight: 700;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">SAP
+                    Service Layer Username</label>
+                  <input id="cfg-input-username" placeholder="manager" required
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">SAP
+                    Service Layer Password</label>
+                  <input id="cfg-input-password" type="password" placeholder="••••••••"
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">SAP
+                    Posting Target</label>
+                  <select id="cfg-posting-mode"
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); font-weight: 700; border-radius: 4px;">
+                    <option value="invoice">Post as AP Invoice</option>
+                    <option value="draft">Post as Draft Invoice</option>
+                  </select>
+                </div>
+              </div>
+
+              <div
+                style="font-weight: 700; color: var(--sap-blue-brand); margin: 1rem 0 0.6rem 0; font-size: 0.88rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3rem;">
+                2. OCR Engine Provider &amp; API Key Settings</div>
+              <div class="admin-config-grid"
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; padding: 0.5rem 0;">
+                <div>
+                  <label
+                    style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">Selected
+                    OCR Engine Provider</label>
+                  <select id="cfg-ocr-provider"
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); font-weight: 700; border-radius: 4px;">
+                    <option value="nvidia_ocr" selected>NVIDIA Llama 3.2 Vision OCR (Primary AI Engine)</option>
+                    <option value="custom_vision">Custom Vision / Cloud OCR Model</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">OCR
+                    API Key / Secret Token</label>
+                  <input id="cfg-ocr-api-key" type="password" placeholder="nvapi-... Secret API Key"
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">OCR
+                    API Endpoint / Model URL</label>
+                  <input id="cfg-ocr-api-url"
+                    placeholder="https://ai.api.nvidia.com/v1/gr/meta/llama-3.2-11b-vision-instruct"
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-family: var(--font-mono); font-size: 0.8rem;">
+                </div>
+                <div>
+                  <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">OCR
+                    Model Name / Version</label>
+                  <input id="cfg-ocr-model-name" placeholder="meta/llama-3.2-11b-vision-instruct"
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                </div>
+              </div>
+
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.2rem; padding-top: 0.8rem; border-top: 1px solid var(--border-color);">
+                <span id="cfg-ocr-engine"
+                  style="font-size: 0.85rem; color: var(--sap-blue-brand); font-weight: 600;">Active Engine: NVIDIA Llama
+                  3.2 Vision OCR Engine</span>
+                <button type="submit" class="sap-btn gold" style="padding: 0.45rem 1.2rem; font-weight: 700;">💾 Save
+                  System &amp; OCR Configuration</button>
+              </div>
+            </form>
+          </div>
+          <div class="sap-card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <h3>🎨 Client Branding &amp; White-Labeling</h3>
+            </div>
+            <form id="form-branding" style="display: grid; gap: 0.8rem; margin-top: 1rem;"
+              enctype="multipart/form-data">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                  <label
+                    style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">Application
+                    Name</label>
+                  <input id="branding-app-name" name="app_name" type="text" placeholder="e.g. Acme Corp Invoice System"
+                    style="width: 100%; padding: 0.5rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                </div>
+                <div>
+                  <label
+                    style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem; color: var(--text-dim);">Client
+                    Logo (PNG/JPG)</label>
+                  <input id="branding-logo" name="logo" type="file" accept="image/*"
+                    style="width: 100%; padding: 0.3rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-size: 0.8rem;">
+                </div>
+              </div>
+              <div style="text-align: right; margin-top: 0.5rem;">
+                <button type="submit" class="sap-btn"
+                  style="background: #a855f7; border-color: #9333ea; padding: 0.45rem 1.2rem; font-weight: 700;">💾 Save
+                  Client Branding</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- ADMIN SUBTAB 2: Dropdown Master Data -->
+        <div id="admin-subtab-master-sec" class="hidden">
+          <div class="sap-card">
+            <div class="card-header">
+              <h3>🛠️ Dropdown Master Table Editor</h3>
+              <span class="hint">Add or edit master values for Vendor Code/Name, Series, Branch, Tax Codes &amp; Cost
+                Centers</span>
+            </div>
+
+            <!-- Action Toolbar for Option 1 (SAP Live API Sync) and Option 2 (Excel Bulk Upload & Template) -->
+            <div
+              style="display: flex; gap: 1rem; align-items: center; justify-content: space-between; background: linear-gradient(135deg, rgba(30, 58, 138, 0.3), rgba(15, 23, 42, 0.4)); padding: 1rem; border-radius: 8px; border: 1px solid var(--sap-gold); margin-bottom: 1.2rem; flex-wrap: wrap;">
+              <div style="display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap;">
+                <button type="button" class="sap-btn primary-glow" id="btn-sap-sync-master-data"
+                  style="padding: 0.5rem 1rem;">⚡ Sync Live from SAP B1 API</button>
+                <a href="/admin/master-data/template" download class="sap-btn outline" id="btn-download-master-template"
+                  style="padding: 0.5rem 1rem; text-decoration: none;">📥 Download Excel Template (.xlsx)</a>
+              </div>
+              <div style="display: flex; gap: 0.6rem; align-items: center;">
+                <input type="file" id="admin-excel-upload-input" accept=".xlsx,.xls,.csv" style="display: none;">
+                <button type="button" class="sap-btn accent" id="btn-trigger-excel-upload"
+                  style="padding: 0.5rem 1rem;">📁 Bulk Upload Master Data Excel</button>
+              </div>
+            </div>
+
+            <form id="admin-master-form"
+              style="display: flex; gap: 0.8rem; align-items: flex-end; margin: 1rem 0; flex-wrap: wrap; background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 6px;">
+              <div style="flex: 1; min-width: 150px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Target Field Category</label>
+                <select id="admin-category" required style="width: 100%; padding: 0.4rem;">
+                  <option value="vendors">Vendor Code &amp; Name</option>
+                  <option value="items">Line: Item Code &amp; Name</option>
+                  <option value="currencies">BP Currency</option>
+                  <option value="series">Series</option>
+                  <option value="branches">Branch (BPL_ID)</option>
+                  <option value="accounts">Line: Account Code &amp; Name</option>
+                  <option value="tax_codes">Line: Tax Code &amp; Rate</option>
+                  <option value="cost_centers1">Line: Cost Center 1</option>
+                  <option value="cost_centers2">Line: Cost Center 2</option>
+                  <option value="cost_centers3">Line: Cost Center 3</option>
+                  <option value="wtax_codes">WHT / TDS Codes</option>
+                  <option value="sac_entries">Line: SAC Entries (OSAC)</option>
+                  <option value="vendor_addresses">Vendor Addresses (Logistics)</option>
+                  <option value="place_of_supply">Place of Supply (State Codes)</option>
+                  <option value="locations">Locations (Warehouse)</option>
+                </select>
+              </div>
+              <div style="flex: 1; min-width: 130px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Code</label>
+                <input id="admin-code" placeholder="e.g. V00999 or GST18" required
+                  style="width: 100%; padding: 0.4rem;">
+              </div>
+              <div style="flex: 2; min-width: 180px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Name / Description</label>
+                <input id="admin-name" placeholder="e.g. New Vendor Ltd" required style="width: 100%; padding: 0.4rem;">
+              </div>
+              <div style="flex: 1; min-width: 100px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Rate / Extra Data</label>
+                <input id="admin-extra" placeholder="e.g. 18.00" style="width: 100%; padding: 0.4rem;">
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.5rem;">
+                <input type="checkbox" id="admin-is-default" style="width: 16px; height: 16px; cursor: pointer;">
+                <label for="admin-is-default"
+                  style="font-size: 0.78rem; color: var(--sap-gold); font-weight: 700; cursor: pointer;">Set as Default
+                  Entry</label>
+              </div>
+              <button type="submit" class="sap-btn primary" style="height: 34px;">➕ Save Master Entry</button>
+            </form>
+
+            <div style="margin-top: 1rem;">
+              <div class="type-switcher"
+                style="margin-bottom: 0.8rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                  <label style="font-weight: 600; font-size: 0.82rem;">Filter Category:</label>
+                  <select id="admin-filter-category"
+                    style="padding: 0.35rem 0.7rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px; font-size: 0.82rem;">
+                    <option value="all">All Master Categories</option>
+                    <option value="vendors">Vendors</option>
+                    <option value="items">Items</option>
+                    <option value="currencies">Currencies</option>
+                    <option value="series">Series</option>
+                    <option value="branches">Branches</option>
+                    <option value="accounts">Accounts</option>
+                    <option value="tax_codes">Tax Codes</option>
+                    <option value="cost_centers1">Cost Center 1</option>
+                    <option value="cost_centers2">Cost Center 2</option>
+                    <option value="cost_centers3">Cost Center 3</option>
+                    <option value="wtax_codes">WHT / TDS Codes</option>
+                    <option value="sac_entries">SAC Entries</option>
+                    <option value="vendor_addresses">Vendor Addresses</option>
+                    <option value="place_of_supply">Place of Supply</option>
+                    <option value="locations">Locations</option>
+                  </select>
+                </div>
+                <div style="flex: 1; max-width: 380px;">
+                  <input type="text" id="admin-master-search"
+                    placeholder="🔍 Search code, name, branch or extra data..."
+                    style="width: 100%; padding: 0.4rem 0.75rem; font-size: 0.82rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 4px;">
+                </div>
+              </div>
+              <div class="sap-table-wrapper">
+                <table class="sap-grid-table" id="admin-master-table">
+                  <thead>
+                    <tr>
+                      <th>Category</th>
+                      <th>Code</th>
+                      <th>Name / Description</th>
+                      <th>Rate / Extra Data</th>
+                      <th>Default Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="admin-master-tbody">
+                    <tr>
+                      <td colspan="5" class="empty-cell">Loading master records...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUBTAB 3: Form Settings Customizer -->
+        <div id="admin-subtab-form-sec" class="hidden">
+          <div class="sap-card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <h3>📋 Dynamic SAP Form Settings &amp; Field Customizer</h3>
+              <span class="hint">Enable/disable fields or add custom SAP Service Layer parameter fields
+                dynamically</span>
+            </div>
+
+            <form id="admin-field-form"
+              style="display: flex; gap: 0.8rem; align-items: flex-end; margin: 1rem 0; flex-wrap: wrap; background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 6px;">
+              <div style="flex: 1; min-width: 120px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Target Section</label>
+                <select id="field-section-select" required style="width: 100%; padding: 0.4rem;">
+                  <option value="header">Header Field</option>
+                  <option value="lines">Line Item Field</option>
+                </select>
+              </div>
+              <div style="flex: 1.2; min-width: 130px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Field Key / ID</label>
+                <input id="field-id-input" placeholder="e.g. project_code" required
+                  style="width: 100%; padding: 0.4rem;">
+              </div>
+              <div style="flex: 1.2; min-width: 130px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">SAP Service Layer
+                  Param</label>
+                <input id="field-sap-input" placeholder="e.g. ProjectCode" required
+                  style="width: 100%; padding: 0.4rem;">
+              </div>
+              <div style="flex: 1.5; min-width: 150px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">UI Label Name</label>
+                <input id="field-label-input" placeholder="e.g. Project Code" required
+                  style="width: 100%; padding: 0.4rem;">
+              </div>
+              <div style="flex: 1; min-width: 110px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Control Type</label>
+                <select id="field-type-select" style="width: 100%; padding: 0.4rem;">
+                  <option value="text">Text Input</option>
+                  <option value="number">Number Input</option>
+                  <option value="date">Date Picker</option>
+                  <option value="select">Select Dropdown</option>
+                  <option value="textarea">Text Area</option>
+                </select>
+              </div>
+              <div
+                style="display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.5rem; flex: 0.5; min-width: 110px;">
+                <input type="checkbox" id="field-visible-checkbox" checked
+                  style="width: 16px; height: 16px; cursor: pointer;">
+                <label for="field-visible-checkbox"
+                  style="font-size: 0.78rem; color: var(--sap-gold); font-weight: 700; cursor: pointer;">View
+                  (UI)</label>
+              </div>
+              <button type="submit" class="sap-btn primary" style="height: 34px;">📋 Add Dynamic SAP Field</button>
+            </form>
+
+            <div class="sap-table-wrapper">
+              <table class="sap-grid-table" id="admin-fields-table">
+                <thead>
+                  <tr>
+                    <th>Section</th>
+                    <th>UI Field Label</th>
+                    <th>SAP JSON Param Name</th>
+                    <th>Field ID</th>
+                    <th>Type</th>
+                    <th>Enabled (SAP)</th>
+                    <th>View (UI)</th>
+                    <th>Required</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-fields-tbody">
+                  <tr>
+                    <td colspan="9" class="empty-cell">Loading dynamic form fields...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUBTAB 4: Portal Users -->
+        <div id="admin-subtab-users-sec" class="hidden">
+          <div class="sap-card" style="margin-bottom: 1.5rem;">
+            <div class="card-header">
+              <h3>👥 Portal User &amp; Password Management</h3>
+              <span class="hint">Create or edit portal user credentials and role access</span>
+            </div>
+
+            <form id="admin-user-form"
+              style="display: flex; gap: 0.8rem; align-items: flex-end; margin: 1rem 0; flex-wrap: wrap; background: rgba(255,255,255,0.03); padding: 1rem; border-radius: 6px;">
+              <div style="flex: 1; min-width: 150px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">User Role</label>
+                <select id="user-role-select" required style="width: 100%; padding: 0.4rem;">
+                  <option value="user">Standard User</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              <div style="flex: 1.5; min-width: 150px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">User Name</label>
+                <input id="user-name-input" placeholder="e.g. john_doe" required style="width: 100%; padding: 0.4rem;">
+              </div>
+              <div style="flex: 1.5; min-width: 150px;">
+                <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Password</label>
+                <input id="user-password-input" type="password" placeholder="Set password" required
+                  style="width: 100%; padding: 0.4rem;">
+              </div>
+              <button type="submit" class="sap-btn gold" style="height: 34px;">👤 Save User Credential</button>
+            </form>
+
+            <div class="sap-table-wrapper">
+              <table class="sap-grid-table" id="admin-user-table">
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Password</th>
+                    <th>Created Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-user-tbody">
+                  <tr>
+                    <td colspan="5" class="empty-cell">Loading users...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADMIN SUBTAB 5: AI System Prompt -->
+        <div id="admin-subtab-ai-sec" class="hidden">
+          <div class="sap-card">
+            <div class="card-header">
+              <h3>🤖 AI Model System Prompt Editor (Admin Access)</h3>
+              <button type="button" class="sap-btn gold" id="btn-save-ai-prompt">💾 Save AI Prompt
+                Configuration</button>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.8rem;">
+              Edit the core AI Extraction Prompt used by Tesseract OCR &amp; LLM extraction rules to refine business
+              logic, GST tax calculations, and vendor field parsing.
+            </p>
+            <textarea id="admin-ai-prompt-input" rows="12"
+              style="width: 100%; font-family: var(--font-mono); font-size: 0.82rem; padding: 0.75rem; background: var(--sap-input-bg, #ffffff); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px; resize: vertical;"></textarea>
+          </div>
+        </div>
+
+        <!-- ADMIN SUBTAB 6: Validation Rules Engine -->
+        <div id="admin-subtab-validations-sec" class="hidden">
+          <div class="sap-card">
+            <div class="card-header border-bottom pb-3">
+              <div>
+                <h3>🛡️ Validation Rules Engine</h3>
+                <span class="hint">Define dynamic rules that block posting if conditions aren't met</span>
+              </div>
+            </div>
+
+            <form id="admin-validation-form" onsubmit="window.saveValidationRule(event)" class="mt-4 sap-grid-2">
+              <input type="hidden" id="vr-id">
+              <div>
+                <label>Rule Name (e.g. "Block missing tax")</label>
+                <input type="text" id="vr-name" class="sap-input w-100" required>
+              </div>
+              <div>
+                <label>Target Field Name (e.g. "tax_amount", "tax_code")</label>
+                <input type="text" id="vr-field" class="sap-input w-100" required>
+              </div>
+              <div>
+                <label>Condition</label>
+                <select id="vr-condition" class="sap-input w-100" required>
+                  <option value="not_empty">Must not be empty</option>
+                  <option value="is_empty">Must be empty</option>
+                  <option value="==">Equals (==)</option>
+                  <option value="!=">Not Equals (!=)</option>
+                  <option value=">">Greater Than (&gt;)</option>
+                  <option value="<">Less Than (&lt;)</option>
+                  <option value=">=">Greater Than or Equal (&gt;=)</option>
+                  <option value="<=">Less Than or Equal (&lt;=)</option>
+                  <option value="contains">Contains text</option>
+                </select>
+              </div>
+              <div>
+                <label>Target Value (leave blank for empty checks)</label>
+                <input type="text" id="vr-value" class="sap-input w-100">
+              </div>
+              <div style="grid-column: span 2;">
+                <label>Custom Error Message to Display</label>
+                <input type="text" id="vr-message" class="sap-input w-100"
+                  placeholder="e.g. You must provide a valid tax code!" required>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <label style="display: flex; align-items: center; gap: 5px;">
+                  <input type="checkbox" id="vr-active" checked> Is Active?
+                </label>
+                <button type="submit" class="sap-btn gold" style="padding: 0.4rem 1rem;">💾 Save Rule</button>
+                <button type="button" class="sap-btn outline"
+                  onclick="document.getElementById('admin-validation-form').reset(); document.getElementById('vr-id').value='';">Clear</button>
+              </div>
+            </form>
+
+            <div class="sap-table-wrapper" style="margin-top: 1.5rem;">
+              <table class="sap-grid-table">
+                <thead>
+                  <tr>
+                    <th>Rule Name</th>
+                    <th>Target Field</th>
+                    <th>Condition</th>
+                    <th>Value</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-validations-tbody">
+                  <tr>
+                    <td colspan="6" class="empty-cell">Loading rules...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <!-- User / Admin Authentication Login Modal (Split Layout) -->
+  <div id="auth-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-panel auth-split-panel">
+      <!-- Left side: Login Form -->
+      <div class="auth-login-side">
+        <header
+          style="justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <div class="sap-gold-square">SAP</div>
+            <h3 style="font-size: 1.1rem; color: #fff; margin: 0;">Portal Authentication Login</h3>
+          </div>
+        </header>
+        <form id="auth-form" action="javascript:void(0);" onsubmit="return false;"
+          style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.2rem; text-align: left;">
+          <div>
+            <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Select Access Role</label>
+            <select id="auth-role-input"
+              style="width: 100%; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;">
+              <option value="user">Standard User (A/P Invoice Entry &amp; Queue)</option>
+              <option value="admin">Administrator (Full Access &amp; Master Data Editor)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Username</label>
+            <input id="auth-username-input" placeholder="Enter username (e.g. user or admin)" required
+              style="width: 100%; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;">
+          </div>
+          <div>
+            <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Password</label>
+            <input id="auth-password-input" type="password" placeholder="Enter password" required
+              style="width: 100%; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;">
+          </div>
+          <button type="button" id="btn-submit-auth" onclick="handlePortalLogin(event)" class="sap-btn gold"
+            style="width: 100%; padding: 0.6rem; margin-top: 0.5rem; font-weight: 700;">🔑 Log In to Workspace</button>
+        </form>
+      </div>
+
+      <!-- Right side: Memory Match Game -->
+      <div class="auth-game-side">
+        <h4 style="color: var(--sap-gold); margin-top: 0; margin-bottom: 0.5rem; font-size: 1rem; text-align: center;">
+          Memory Match Game</h4>
+        <p style="color: var(--text-dim); font-size: 0.75rem; text-align: center; margin-bottom: 1rem;">Find the
+          matching invoice pairs while you wait!</p>
+
+        <div id="memory-game-board" class="memory-board">
+          <!-- Game cards will be injected by JS -->
+        </div>
+        <div id="memory-game-message" class="hidden"
+          style="text-align: center; color: #10b981; font-weight: 600; margin-top: 1rem;">
+          <img src="https://media.giphy.com/media/26tOZ42Mg6pbTUPHW/giphy.gif" alt="Celebration GIF"
+            style="width: 120px; margin: 0 auto 0.5rem auto; display: block; border-radius: 8px;">
+          🎉 You won! All pairs matched!
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast" role="status"></div>
+
+  <!-- SAP Draft Modal -->
+  <div id="draft-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-panel">
+      <header>
+        <h3>SAP Business One Service Layer Draft Payload</h3>
+        <button id="close-draft-modal" class="text-button">✕ Close</button>
+      </header>
+      <pre id="draft-json" class="draft-json"></pre>
+      <div class="modal-actions">
+        <button id="post-draft" class="sap-btn gold">Trigger Service Layer Draft POST</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAP Posted Response Modal -->
+  <div id="sap-response-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-panel" style="max-width: 850px;">
+      <header style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; color: var(--sap-gold);">📋 SAP Business One Response &amp; Field Variance Log</h3>
+        <button id="close-sap-response-modal" class="text-button" style="cursor: pointer;">✕ Close</button>
+      </header>
+      <div id="sap-response-summary"
+        style="margin: 1rem 0; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 0.85rem;">
+      </div>
+      <label style="display: block; font-size: 0.78rem; color: var(--text-dim); margin-bottom: 0.4rem;">Full Service
+        Layer Response JSON (DocEntry / DocNum / DocumentLines):</label>
+      <pre id="sap-response-json" class="draft-json"
+        style="max-height: 380px; overflow-y: auto; background: rgba(15,23,42,0.9); border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 6px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-cyan);"></pre>
+      <div class="modal-actions" style="margin-top: 1rem; justify-content: flex-end;">
+        <button id="btn-close-sap-resp-bottom" class="sap-btn outline"
+          onclick="document.getElementById('sap-response-modal').classList.add('hidden')">Close Log Window</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Select PO/GRN Modal -->
+  <div id="select-po-modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-panel" style="max-width: 650px;">
+      <header style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 id="select-po-title" style="margin: 0; color: var(--sap-gold);">📋 Select Open Document</h3>
+        <button id="close-po-modal" class="text-button" style="cursor: pointer;">✕ Close</button>
+      </header>
+      <div style="margin: 1rem 0;">
+        <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.8rem;">Select a document to copy lines
+          into the current A/P Invoice.</p>
+        <div class="sap-table-wrapper" style="max-height: 300px; overflow-y: auto;">
+          <table class="sap-grid-table" id="po-list-table">
+            <thead>
+              <tr>
+                <th>PO Num (DocNum)</th>
+                <th>Doc Date</th>
+                <th>Doc Total</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="po-list-tbody">
+              <tr>
+                <td colspan="4" class="empty-cell">Loading open POs...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top: 1rem; justify-content: flex-end;">
+        <button id="btn-close-po-bottom" class="sap-btn outline"
+          onclick="document.getElementById('select-po-modal').classList.add('hidden')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=1.0.41"></script>
+  <script src="/static/cropping.js?v=1.0.0"></script>
+</body>
+
+</html>

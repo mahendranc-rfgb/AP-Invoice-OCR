@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+.dockerignore
+*.db
+data/*.db
+data/invoices.db
+.pytest_cache/
+tests/
+.env

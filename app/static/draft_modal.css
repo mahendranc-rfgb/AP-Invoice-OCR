@@ -1,0 +1,42 @@
+.modal{position:fixed;inset:0;display:grid;place-items:center;background:rgba(10,20,30,0.72);z-index:9999;backdrop-filter:blur(8px)}
+.modal.hidden{display:none !important;}
+.modal-panel{background:#ffffff;color:#1e293b;border-radius:20px;padding:24px;max-width:920px;width:94%;max-height:84vh;overflow:auto;box-shadow:0 36px 68px rgba(10,20,30,0.15);border:1px solid #e2e8f0}
+.modal-panel header{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid #e2e8f0}
+.modal-panel header h3{margin:0;font-size:20px;color:#1e293b}
+.modal-panel header button{font:600 12px Manrope;color:#64748b;background:transparent;border:none;cursor:pointer}
+.draft-json{background:#f8fafc;color:#1e293b;padding:18px;border-radius:16px;font-family:DM Mono,monospace;font-size:13px;white-space:pre-wrap;line-height:1.55;border:1px solid #e2e8f0;min-height:320px;max-height:54vh;overflow:auto}
+.modal-actions{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end;margin-top:18px}
+.modal-actions .btn.primary{background:#2563eb;color:#fff}
+.modal-actions .btn.ghost{background:#f1f5f9;color:#1e293b;border:1px solid #e2e8f0}
+.panel{background:linear-gradient(180deg,#ffffff 0%,#f8fbff 100%);border:none;box-shadow:0 24px 50px rgba(23,32,51,0.08);border-radius:20px}
+.panel-heading{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:24px;border-bottom:1px solid rgba(226,232,240,0.8);background:rgba(255,255,255,0.85);border-radius:20px 20px 0 0}
+.panel-heading .eyebrow{margin:0;color:#6f7f98}
+.steps{display:grid;gap:14px;padding:22px 24px 24px}
+.step{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:16px 18px;background:#f8fbff;border:1px solid rgba(83,104,239,0.14);border-radius:16px;transition:transform .2s ease,box-shadow .2s ease}
+.step:hover{transform:translateY(-1px);box-shadow:0 18px 42px rgba(83,104,239,0.08)}
+.step span{min-width:34px;min-height:34px;border-radius:50%;display:grid;place-items:center;background:#eaf0ff;color:#5368ef;font-weight:800}
+.step.done{border-color:rgba(21,183,124,0.14);background:#f2fbf7}
+.step.done span{background:#cff2d8;color:#0f9c76}
+.step.active{border-color:rgba(83,104,239,0.24)}
+.step b{margin:0;font-size:14px;color:#202d48}
+.step small{color:#6f7f98}
+.result{padding:24px 24px 26px;background:linear-gradient(180deg,#eff5ff 0%,#f8fbff 100%);border-radius:18px;box-shadow:0 20px 35px rgba(23,32,51,0.06);color:#1c2a49}
+.toast{position:fixed;bottom:24px;right:24px;background:rgba(13,32,67,0.96);color:#f8fbff;padding:14px 18px;border-radius:16px;font:700 13px Manrope;opacity:0;pointer-events:none;transform:translateY(12px);transition:opacity .22s ease,transform .22s ease;z-index:999}
+.toast.show{opacity:1;pointer-events:auto;transform:translateY(0)}
+.table-wrap{overflow:auto;border-radius:18px;box-shadow:0 20px 45px rgba(23,32,51,0.08)}
+table{width:100%;border-collapse:separate;border-spacing:0;background:#fff}
+th,td{padding:16px 14px;text-align:left;border-bottom:1px solid #e8effb}
+th{font:700 11px 'DM Mono';text-transform:uppercase;color:#72809d;letter-spacing:1px}
+.table-status{display:inline-flex;align-items:center;gap:6px;font:700 11px 'DM Mono';padding:8px 12px;border-radius:999px;background:#eef4ff;color:#3b4b82}
+.table-status.needs_review{background:#fff4f4;color:#b6495c}
+.table-status.validated{background:#ecf9ef;color:#0f9c76}
+.table-status.sap_draft_ready{background:#eef7ff;color:#3f5dd9}
+.upload-zone{transition:transform .2s ease,box-shadow .2s ease;border-radius:14px}
+.upload-zone:hover{transform:translateY(-1px);box-shadow:0 20px 40px rgba(83,104,239,0.1)}
+.upload-zone.dragging{border-color:#5c7cfa;background:#eef4ff}
+.btn.ghost{background:rgba(83,104,239,0.08);color:#5368ef}
+.btn.primary:hover{transform:translateY(-1px);box-shadow:0 18px 34px rgba(83,104,239,0.2)}
+#upload-state{font-weight:700}
+#draft-json{min-height:320px}
+.table-wrap::-webkit-scrollbar{height:8px;background:transparent}
+.table-wrap::-webkit-scrollbar-thumb{background:rgba(83,104,239,0.22);border-radius:999px}

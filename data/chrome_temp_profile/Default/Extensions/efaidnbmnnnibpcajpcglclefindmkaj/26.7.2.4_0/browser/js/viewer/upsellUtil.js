@@ -1,0 +1,18 @@
+/*************************************************************************
+* ADOBE CONFIDENTIAL
+* ___________________
+*
+*  Copyright 2015 Adobe Systems Incorporated
+*  All Rights Reserved.
+*
+* NOTICE:  All information contained herein is, and remains
+* the property of Adobe Systems Incorporated and its suppliers,
+* if any.  The intellectual and technical concepts contained
+* herein are proprietary to Adobe Systems Incorporated and its
+* suppliers and are protected by all applicable intellectual property laws,
+* including trade secret and or copyright laws.
+* Dissemination of this information or reproduction of this material
+* is strictly forbidden unless prior written permission is obtained
+* from Adobe Systems Incorporated.
+**************************************************************************/
+import{dcLocalStorage as e}from"../../../common/local-storage.js";import{getFloodgateFlag as t}from"../../../common/util.js";import{loggingApi as i}from"../../../common/loggingApi.js";import{CACHE_PURGE_SCHEME as n}from"../../../sw_modules/constant.js";const o="dc-cv-upsell-popup-metadata",r=85,a=95;export async function getUpsellPopupDimensions(){const e={widthPercent:r,heightPercent:a};try{if(!await t(o,n.NO_CALL))return e;const i=await chrome.runtime.sendMessage({main_op:"getFloodgateMeta",flag:o});if(!i)return e;const r=JSON.parse(i);return{widthPercent:r.widthPercent??e.widthPercent,heightPercent:r.heightPercent??e.heightPercent}}catch(t){return e}}function w(e){return function(e,t){const i=Math.max(0,Math.min(e.left+e.width,t.left+t.width)-Math.max(e.left,t.left)),n=Math.max(0,Math.min(e.top+e.height,t.top+t.height)-Math.max(e.top,t.top)),o=e.width*e.height;return o>0?i*n/o:0}(e,{left:window.screen.availLeft??0,top:window.screen.availTop??0,width:window.screen.availWidth,height:window.screen.availHeight})<.6}export async function openUpsellPopupWindow(t,n,o,r){const a=null==r?"[v1] [Upsell Sign-in]":"[v1] [Paywall]",{widthPercent:s,heightPercent:d}=await getUpsellPopupDimensions(),c=Math.round(window.outerWidth*(s/100)),p=Math.round(window.innerHeight*(d/100)),l=window.outerHeight-window.innerHeight,h=Math.round(window.screenX+(window.outerWidth-c)/2),m=Math.round(window.screenY+l+(window.innerHeight-p)/2);let u=null;const g=async e=>{u=e??null;const n=await chrome.windows.create({url:t,type:"popup",width:c,height:p,...e});return i.warn({message:`${a} Popup window created`,redirectionStartTime:r,...r&&{durationMs:Date.now()-r}}),n};try{let t;if(w({left:h,top:m,width:c,height:p}))i.warn({message:`${a} Popup window position invalid (parent browser window likely off-screen) — creating without explicit position`,redirectionStartTime:r}),t=await g();else try{t=await g({left:h,top:m})}catch(e){if(!/bounds/i.test(e?.message||""))throw e;i.warn({message:`${a} Popup window position invalid (parent browser window likely off-screen) — retrying without explicit position`,redirectionStartTime:r,error:e.message}),t=await g()}if("number"!=typeof t?.id)return void i.error({message:`${a} Popup window creation failed — chrome.windows.create returned no id`,redirectionStartTime:r});const s=e.getItem("upsellSessions")||{};s[n]={...s[n],popupWindow:t,openedAt:Date.now(),...r&&{redirectionStartTime:r}},e.setItem("upsellSessions",s),o&&o(t)}catch(e){i.error({message:`${a} Popup window creation failed — chrome.windows.create returned no id`,redirectionStartTime:r,error:e?.message||String(e),width:c,height:p,...u})}}export function logPaywallOpening(e,t,n){const o=Date.now();i.info({message:"[v1] [Paywall] Perf: opening paywall",redirectionStartTime:e,openingAt:o,durationMs:o-e,paywallType:t}),n("DCBrowserExt:Viewer:Paywall:Opening")}

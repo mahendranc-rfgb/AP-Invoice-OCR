@@ -1,0 +1,6 @@
+# Additional dependencies required for PyTorch TrOCR fine-tuning and inference
+transformers>=4.40.0,<5.0
+datasets>=2.18.0,<3.0
+jiwer>=3.0.0,<4.0
+pandas>=2.0.0,<3.0
+opencv-python-headless>=4.8.0,<5.0
