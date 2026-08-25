@@ -7,9 +7,10 @@ window.addEventListener('load', () => {
     const toolbar = document.querySelector('.sap-toolbar') || document.body;
     
     const cropBtn = document.createElement('button');
-    cropBtn.className = 'sap-btn outline';
+    cropBtn.className = 'sap-btn-icon';
     cropBtn.style = 'padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-cyan); border-color: var(--accent-cyan); margin-left: 10px;';
-    cropBtn.innerText = '✂️ Draw Box to Extract';
+    cropBtn.title = 'Draw Box to Extract';
+    cropBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>';
     toolbar.appendChild(cropBtn);
 
     let isDrawingMode = false;
@@ -148,7 +149,7 @@ window.addEventListener('load', () => {
 
     function sendExtractionRequest(coords) {
         // Show loading state
-        cropBtn.innerText = '⏳ Extracting...';
+        cropBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>';
         
         // Since we are dealing with a PDF or image preview, we will just send a mock blob for now
         // to complete the API call without needing to hook deeply into the existing file uploader.
@@ -199,7 +200,7 @@ window.addEventListener('load', () => {
         }).finally(() => {
             disableDrawingMode();
             isDrawingMode = false;
-            cropBtn.innerText = '✂️ Draw Box to Extract';
+            cropBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>';
             cropBtn.style.background = 'transparent';
             cropBtn.style.color = 'var(--accent-cyan)';
         });

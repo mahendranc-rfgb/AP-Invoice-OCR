@@ -39,3 +39,4 @@ DocType  dDocument_Service,.txt
 dist/
 build/
 data_test
+.env.example

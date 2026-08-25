@@ -28,14 +28,18 @@
         style="background: rgba(234, 179, 8, 0.15); border-color: var(--sap-gold); color: var(--sap-gold); cursor: pointer;">
         👤 Not Logged In
       </span>
-      <button class="sap-btn outline" id="btn-logout"
-        style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);">🚪
-        Logout</button>
-      <button class="sap-btn-icon" title="Refresh Workspace" id="refresh">↻</button>
-      <a href="/manual?print=1" target="_blank" class="sap-btn outline"
-        style="padding: 0.2rem 0.5rem; margin-right: 0.5rem; font-size: 0.75rem; color: var(--sap-gold); border-color: var(--sap-gold); text-decoration: none;">📥
-        Download PDF Manual</a>
-      <a href="/docs" target="_blank" class="sap-btn-icon" title="API Docs">⌘ API</a>
+      <button class="sap-btn-icon" id="btn-logout" title="Logout" style="color: var(--accent-rose);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+      </button>
+      <button class="sap-btn-icon" id="refresh" title="Refresh Workspace">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      </button>
+      <a href="/manual?print=1" target="_blank" class="sap-btn-icon" title="Download PDF Manual" style="color: var(--sap-gold);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </a>
+      <a href="/docs" target="_blank" class="sap-btn-icon" title="API Docs">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+      </a>
     </div>
   </header>
 
@@ -1561,59 +1565,73 @@
     </main>
   </div>
 
-  <!-- User / Admin Authentication Login Modal (Split Layout) -->
-  <div id="auth-modal" class="modal hidden" role="dialog" aria-modal="true">
-    <div class="modal-panel auth-split-panel">
-      <!-- Left side: Login Form -->
-      <div class="auth-login-side">
-        <header
-          style="justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
-          <div style="display: flex; align-items: center; gap: 0.6rem;">
-            <div class="sap-gold-square">SAP</div>
-            <h3 style="font-size: 1.1rem; color: #fff; margin: 0;">Portal Authentication Login</h3>
-          </div>
-        </header>
-        <form id="auth-form" action="javascript:void(0);" onsubmit="return false;"
-          style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1.2rem; text-align: left;">
-          <div>
-            <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Select Access Role</label>
-            <select id="auth-role-input"
-              style="width: 100%; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;">
-              <option value="user">Standard User (A/P Invoice Entry &amp; Queue)</option>
-              <option value="admin">Administrator (Full Access &amp; Master Data Editor)</option>
-            </select>
-          </div>
-          <div>
-            <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Username</label>
-            <input id="auth-username-input" placeholder="Enter username (e.g. user or admin)" required
-              style="width: 100%; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;">
-          </div>
-          <div>
-            <label style="display: block; font-size: 0.78rem; margin-bottom: 0.3rem;">Password</label>
-            <input id="auth-password-input" type="password" placeholder="Enter password" required
-              style="width: 100%; padding: 0.5rem; background: var(--bg-card); border: 1px solid var(--border-color); color: #fff; border-radius: 4px;">
-          </div>
-          <button type="button" id="btn-submit-auth" onclick="handlePortalLogin(event)" class="sap-btn gold"
-            style="width: 100%; padding: 0.6rem; margin-top: 0.5rem; font-weight: 700;">🔑 Log In to Workspace</button>
-        </form>
+  <!-- User / Admin Authentication Login Screen (Full Screen Split Layout) -->
+  <div id="auth-modal" class="login-overlay hidden">
+    <div class="login-left-panel">
+      <div class="login-brand">
+        <div class="login-logo-icon" style="background: var(--sap-gold); border-radius: 50%; clip-path: none; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">S</div>
+        <div class="login-logo-text">SAP Business One <span>A/P Invoice OCR Extractor</span></div>
       </div>
-
-      <!-- Right side: Memory Match Game -->
-      <div class="auth-game-side">
-        <h4 style="color: var(--sap-gold); margin-top: 0; margin-bottom: 0.5rem; font-size: 1rem; text-align: center;">
-          Memory Match Game</h4>
-        <p style="color: var(--text-dim); font-size: 0.75rem; text-align: center; margin-bottom: 1rem;">Find the
-          matching invoice pairs while you wait!</p>
-
-        <div id="memory-game-board" class="memory-board">
-          <!-- Game cards will be injected by JS -->
+      
+      <div class="login-left-content">
+        <h2>Automated AP Invoice OCR<br>&amp; Data Entry</h2>
+        <p>Streamline your Accounts Payable workflow by extracting invoice data using AI Vision OCR and syncing directly with SAP Service Layer.</p>
+        
+        <div class="login-feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          </div>
+          <div>
+            <h4>AI-Powered Extraction</h4>
+            <span>Extract vendor details, line items, and taxes with high accuracy</span>
+          </div>
         </div>
-        <div id="memory-game-message" class="hidden"
-          style="text-align: center; color: #10b981; font-weight: 600; margin-top: 1rem;">
-          <img src="https://media.giphy.com/media/26tOZ42Mg6pbTUPHW/giphy.gif" alt="Celebration GIF"
-            style="width: 120px; margin: 0 auto 0.5rem auto; display: block; border-radius: 8px;">
-          🎉 You won! All pairs matched!
+        
+        <div class="login-feature-card">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          </div>
+          <div>
+            <h4>Role-Based Authentication</h4>
+            <span>Encrypted multi-role access for Admin, Creator &amp; Store</span>
+          </div>
         </div>
+      </div>
+      
+      <div class="login-footer">
+        Powered by <strong style="color: #60a5fa;">RFGBPL</strong>
+        <div class="login-socials">
+          <span>in</span><span>x</span><span>ig</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="login-right-panel">
+      <div class="login-form-container">
+        <h3>Sign in</h3>
+        <p class="login-subtitle">to access your SAP B1 AP Automation workspace</p>
+        
+        <form id="auth-form" action="javascript:void(0);" onsubmit="return false;">
+          <div class="login-input-group">
+            <input id="auth-username-input" placeholder="Username or Email" required>
+          </div>
+          <div class="login-input-group password-group">
+            <input id="auth-password-input" type="password" placeholder="Password" required>
+            <span class="password-eye">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </span>
+          </div>
+          
+          <div class="login-form-actions">
+            <label class="remember-me">
+              <input type="checkbox"> Remember me
+            </label>
+          </div>
+          
+          <div class="login-form-submit-row" style="justify-content: flex-end;">
+            <button type="button" id="btn-submit-auth" onclick="handlePortalLogin(event)" class="login-btn-next">Next</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>

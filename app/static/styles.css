@@ -57,17 +57,19 @@ body.sap-b1-theme {
 
 /* SAP Application Top Bar */
 .sap-topbar {
-  height: 64px;
+  min-height: 64px;
   background: var(--sap-header-blue);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
+  padding: 0.5rem 1.5rem;
   box-shadow: none;
   position: sticky;
   top: 0;
   z-index: 100;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .sap-logo-area {
@@ -106,6 +108,7 @@ body.sap-b1-theme {
   display: flex;
   align-items: center;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .sap-status-badge {
@@ -130,20 +133,22 @@ body.sap-b1-theme {
 }
 
 .sap-btn-icon {
-  background: #f1f5f9;
-  border: 1px solid var(--border-color);
-  color: var(--text-main);
-  padding: 0.35rem 0.7rem;
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 0.5rem;
+  border-radius: 50%;
   cursor: pointer;
-  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
   transition: all 0.2s ease;
 }
 
 .sap-btn-icon:hover {
   background: #e2e8f0;
-  border-color: var(--border-color);
+  color: var(--text-main);
 }
 
 .sap-shell {

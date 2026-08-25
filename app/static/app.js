@@ -1838,13 +1838,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const s = inv.supplier || {};
     const lines = inv.lines || [];
 
+    const formatDateForInput = (dStr) => {
+      if (!dStr) return "";
+      try {
+        const d = new Date(dStr);
+        if (isNaN(d.getTime())) return dStr;
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+      } catch(e) {
+        return dStr;
+      }
+    };
+
     if (h.supplier_name) setInputValue("supplier_name", h.supplier_name);
     if (s.sap_card_code) setInputValue("sap_card_code", s.sap_card_code);
     if (h.supplier_gstin) setInputValue("supplier_gstin", h.supplier_gstin);
     if (h.invoice_number) setInputValue("invoice_number", h.invoice_number);
-    if (h.invoice_date) setInputValue("invoice_date", h.invoice_date);
-    if (h.posting_date) setInputValue("posting_date", h.posting_date);
-    if (h.due_date) setInputValue("due_date", h.due_date);
+    if (h.invoice_date) setInputValue("invoice_date", formatDateForInput(h.invoice_date));
+    if (h.posting_date) setInputValue("posting_date", formatDateForInput(h.posting_date));
+    if (h.due_date) setInputValue("due_date", formatDateForInput(h.due_date));
+    if (h.document_date) setInputValue("document_date", formatDateForInput(h.document_date));
     if (h.local_currency) setInputValue("local_currency", h.local_currency);
 
     // Accounting & Logistics Tab Fields
@@ -1885,8 +1900,11 @@ document.addEventListener("DOMContentLoaded", () => {
               }
             }
             input.value = val;
+            input.dispatchEvent(new Event("change", { bubbles: true }));
           } else {
             input.value = val !== null && val !== undefined ? val : "";
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
           }
         };
 
@@ -1944,8 +1962,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
       input.value = val;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
     } else {
       input.value = val;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
     }
   }
 
@@ -3878,13 +3899,13 @@ window.loadDocumentIntoForm = function(btnEl) {
             const docLinesArray = rawLines.DocumentLines || rawLines;
             if (Array.isArray(docLinesArray)) {
                 parsedLines = docLinesArray.map(l => ({
-                    item_code: l.ItemCode || '',
+                    sap_item_code: l.ItemCode || '',
                     description: l.ItemDescription || l.ItemName || '',
                     quantity: l.Quantity || 0,
                     unit_price: l.UnitPrice || 0,
                     line_total: l.LineTotal || 0,
                     tax_code: l.TaxCode || '',
-                    warehouse_code: l.WarehouseCode || '',
+                    location_code: l.WarehouseCode || '',
                     base_line_num: l.LineNum || 0,
                     base_doc_entry: docData.doc_entry,
                     base_doc_type: docData.doc_type === 'PO' ? '22' : '20'
