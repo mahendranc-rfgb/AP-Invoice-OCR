@@ -16,8 +16,8 @@ from app.ocr import OcrPreview, UploadStore
 from app.repository import DatabaseRepository
 from app.settings import settings
 from app.services import InvoiceService
-from app.sap_client import post_draft, SapClientError
-from app import sap_client
+from app.erp.factory import get_erp_client
+from app.routers import admin, master_data, documents
 
 import sys
 import json
@@ -30,8 +30,53 @@ if getattr(sys, 'frozen', False):
 else:
     BASE_DIR = Path(__file__).parent.resolve()
 
-app = FastAPI(title="AP Invoice OCR", version="0.1.0", description="Validated AP invoice pipeline for SAP Business One drafts.")
+import asyncio
+from contextlib import asynccontextmanager
+
+async def periodic_master_data_sync():
+    log.info("Starting periodic master data sync loop (every 10 minutes)...")
+    while True:
+        try:
+            await asyncio.sleep(600)  # Wait 10 minutes before first sync and between syncs
+            log.info("Executing background ERP master data sync...")
+            
+            # Run the synchronous function in a background thread to avoid blocking FastAPI
+            from app.erp.factory import get_erp_client
+            records = await asyncio.to_thread(get_erp_client().sync_all_master_data, None)
+            
+            if records:
+                # Need to update DB
+                count = 0
+                for r in records:
+                    repository.upsert_custom_master_data(
+                        category=r["category"],
+                        code=r["code"],
+                        name=r["name"],
+                        extra_data=r["extra_data"],
+                        is_default=False
+                    )
+                    count += 1
+                log.info(f"Background sync complete: synchronized {count} master records.")
+            
+        except asyncio.CancelledError:
+            log.info("Periodic master data sync loop stopped.")
+            break
+        except Exception as e:
+            log.error(f"Error during background master data sync: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    sync_task = asyncio.create_task(periodic_master_data_sync())
+    yield
+    sync_task.cancel()
+
+app = FastAPI(title="AP Invoice OCR", version="0.1.0", description="Validated AP invoice pipeline for SAP Business One drafts.", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+# Include Routers
+app.include_router(admin.router)
+app.include_router(master_data.router)
+app.include_router(documents.router)
 
 repository = DatabaseRepository(
     database_path=settings.data_dir / "invoices.db",
@@ -225,28 +270,7 @@ def login(payload: dict):
 
 
 
-@app.get("/admin/users")
-def get_admin_users():
-    return repository.get_users()
 
-
-@app.post("/admin/users")
-def add_admin_user(payload: dict):
-    username = payload.get("username")
-    password = payload.get("password")
-    role = payload.get("role", "user")
-    if not username or not password:
-        raise HTTPException(status_code=400, detail="Username and Password are required.")
-    repository.upsert_user(username, password, role)
-    return {"status": "ok", "message": f"Saved user '{username}'"}
-
-
-@app.delete("/admin/users")
-def delete_admin_user(username: str):
-    if username.strip().lower() in ("admin", "user"):
-        raise HTTPException(status_code=400, detail="Default admin and user accounts cannot be deleted.")
-    repository.delete_user(username)
-    return {"status": "ok", "message": f"Deleted user '{username}'"}
 
 @app.get("/admin/validation-rules")
 def get_validation_rules():
@@ -277,9 +301,6 @@ def delete_validation_rule(rule_id: int):
 @app.get("/admin/config")
 def get_admin_config():
     return {
-        "sap_base_url": settings.base_url,
-        "sap_company_db": settings.company_db,
-        "sap_username": settings.username,
         "tesseract_cmd": settings.tesseract_cmd,
         "posting_enabled": settings.posting_enabled,
         "posting_mode": settings.posting_mode,
@@ -292,14 +313,6 @@ def get_admin_config():
 
 @app.post("/admin/config")
 def update_admin_config(payload: dict):
-    if "sap_base_url" in payload and payload["sap_base_url"]:
-        settings.base_url = payload["sap_base_url"].rstrip("/")
-    if "sap_company_db" in payload and payload["sap_company_db"]:
-        settings.company_db = payload["sap_company_db"]
-    if "sap_username" in payload and payload["sap_username"]:
-        settings.username = payload["sap_username"]
-    if "sap_password" in payload and payload["sap_password"]:
-        settings.password = payload["sap_password"]
     if "posting_enabled" in payload:
         settings.posting_enabled = bool(payload["posting_enabled"])
     if "posting_mode" in payload and payload["posting_mode"]:
@@ -331,7 +344,7 @@ def sync_all_open_documents(doc_type: str = Query("PO")):
         if doc_type not in ["PO", "GRN"]:
             return {"status": "error", "detail": "Invalid doc_type. Must be PO or GRN."}
             
-        sap_data = sap_client.get_all_open_documents_from_sap(doc_type)
+        sap_data = get_erp_client().get_all_open_documents(doc_type)
         
         doc_list = []
         for doc in sap_data:
@@ -429,73 +442,7 @@ def delete_form_field(field_id: str):
     return {"status": "ok", "message": f"Deleted field '{field_id}'"}
 
 
-@app.post("/admin/master-data")
-def add_admin_master_data(payload: dict):
-    cat = payload.get("category")
-    code = payload.get("code")
-    name = payload.get("name", "")
-    extra = payload.get("extra_data", "")
-    is_default = bool(payload.get("is_default", False))
-    if not cat or not code:
-        raise HTTPException(status_code=400, detail="Category and Code are required.")
-    repository.upsert_custom_master_data(cat, code, name, extra, is_default)
-    return {"status": "ok", "message": f"Saved {code} in {cat}"}
 
-
-@app.delete("/admin/master-data")
-def delete_admin_master_data(category: str, code: str):
-    repository.delete_custom_master_data(category, code)
-    return {"status": "ok", "message": f"Deleted {code} from {category}"}
-
-
-@app.post("/admin/sap-sync-master-data")
-def sync_sap_master_data_live(category: str | None = Query(None)):
-    from app.sap_client import sync_all_master_data_from_sap, SapClientError
-    try:
-        target_cat = category.strip().lower() if category and category.strip() and category != "all" else None
-        records = sync_all_master_data_from_sap(target_category=target_cat)
-        
-        if target_cat:
-            if target_cat.startswith("cost_centers"):
-                for c_cat in ("cost_centers1", "cost_centers2", "cost_centers3", "cost_centers4", "cost_centers5"):
-                    repository.delete_custom_master_category(c_cat)
-            else:
-                repository.delete_custom_master_category(target_cat)
-
-        count = 0
-        for r in records:
-            repository.upsert_custom_master_data(
-                category=r["category"],
-                code=r["code"],
-                name=r["name"],
-                extra_data=r["extra_data"],
-                is_default=False
-            )
-            if not target_cat or r["category"] == target_cat or (target_cat.startswith("cost_centers") and r["category"].startswith("cost_centers")):
-                count += 1
-            
-        cat_label = f"category '{target_cat}'" if target_cat else "all categories"
-        return {"status": "ok", "message": f"Successfully synchronized {count} active master records live from SAP Business One API for {cat_label}!", "count": count}
-    except SapClientError as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to sync master data from SAP API: {exc}")
-
-
-@app.post("/admin/master-data/set-default")
-def set_admin_master_default(payload: dict):
-    category = payload.get("category")
-    code = payload.get("code")
-    if not category or not code:
-        raise HTTPException(status_code=400, detail="Category and Code are required.")
-    
-    existing = repository.get_custom_master_data()
-    found = next((item for item in existing if item["category"] == category and item["code"] == code), None)
-    name = found["name"] if found else code
-    extra = found["extra_data"] if found else ""
-    
-    repository.upsert_custom_master_data(category, code, name, extra, is_default=True)
-    return {"status": "ok", "message": f"Set {code} as default for {category}"}
 
 
 @app.post("/admin/master-data/bulk-upload")
@@ -697,212 +644,7 @@ def create_document(invoice: StandardInvoice, source_filename: str | None = None
     return repository.save(doc)
 
 
-@app.get("/documents", response_model=list[InvoiceDocument])
-def list_documents():
-    return repository.list()
 
 
-@app.get("/documents/{document_id}", response_model=InvoiceDocument)
-def get_document(document_id: UUID):
-    return load_document(document_id)
 
 
-@app.delete("/documents/{document_id}")
-def delete_document(document_id: UUID):
-    repository.delete(str(document_id))
-    return {"status": "ok", "message": f"Deleted document {document_id}"}
-
-
-@app.put("/documents/{document_id}", response_model=InvoiceDocument)
-def update_document(document_id: UUID, invoice: StandardInvoice):
-    existing = load_document(document_id)
-    existing.invoice = invoice
-    return repository.save(existing)
-
-
-@app.post("/documents/{document_id}/map", response_model=InvoiceDocument)
-def map_document(document_id: UUID):
-    return service.map_document(load_document(document_id))
-
-@app.post("/documents/{document_id}/apply-history", response_model=InvoiceDocument)
-def apply_history(document_id: UUID):
-    doc = load_document(document_id)
-    card_code = doc.invoice.supplier.sap_card_code
-    if card_code:
-        doc, _, _ = service.apply_previous_post_data(doc, card_code, doc.invoice.invoice_header.invoice_number)
-        repository.save(doc)
-    return doc
-
-
-@app.get("/api/vendors/{card_code}/defaults")
-def get_vendor_defaults_endpoint(card_code: str):
-    """Retrieve full learned defaults & master data for a vendor to pre-populate all form fields."""
-    return service.get_vendor_defaults(card_code)
-
-@app.post("/documents/{document_id}/validate", response_model=InvoiceDocument)
-def validate_document(document_id: UUID):
-    return service.validate(load_document(document_id))
-
-
-@app.post("/documents/{document_id}/approve", response_model=InvoiceDocument)
-def approve_document(document_id: UUID, request: ApprovalRequest):
-    document = load_document(document_id)
-    if not document.validation or not document.validation.passed:
-        raise HTTPException(status_code=409, detail="Only successfully validated documents may be approved.")
-    document.status = DocumentStatus.APPROVED
-    document.approved_by = request.approved_by
-    repository.save(document)
-    service.learn_from_document(document)
-    return document
-
-
-@app.post("/documents/{document_id}/sap-draft")
-def sap_draft(document_id: UUID):
-    try:
-        document = load_document(document_id)
-        payload = service.sap_draft_payload(document)
-        document.status = DocumentStatus.SAP_DRAFT_READY
-        repository.save(document)
-        return payload
-    except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-
-
-@app.post("/documents/{document_id}/sap-post")
-def sap_post(document_id: UUID):
-    document = load_document(document_id)
-    
-    # If already posted, clone it so we keep history of the original post
-    if document.status == DocumentStatus.POSTED:
-        doc_dict = document.model_dump()
-        doc_dict.pop("document_id", None)
-        document = InvoiceDocument(**doc_dict)
-        from uuid import uuid4
-        document.document_id = uuid4()
-        document.sap_doc_num = None
-        document.sap_doc_entry = None
-        document.sap_response = None
-        document.status = DocumentStatus.SAP_DRAFT_READY
-        document = repository.save(document)
-
-    try:
-        payload = service.sap_draft_payload(document)
-    except ValueError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-
-    if not settings.posting_enabled:
-        simulated_res = {
-            "DocEntry": 99901,
-            "DocNum": 2600125,
-            "CardCode": document.invoice.supplier.sap_card_code or "V00101",
-            "NumAtCard": document.invoice.invoice_header.invoice_number,
-            "DocTotal": float(document.invoice.totals.grand_total),
-            "VatSum": float(document.invoice.totals.tax_amount),
-            "DocDate": str(document.invoice.invoice_header.invoice_date),
-            "Status": "SUCCESS (Simulated Safe Mode - Set SAP_POSTING_ENABLED=true for Live Service Layer)",
-        }
-        repository.mark_posted(document.invoice.supplier.sap_card_code or "SIMULATED", document.invoice.invoice_header.invoice_number)
-        document.status = DocumentStatus.POSTED
-        document.sap_doc_num = 2600125
-        document.sap_doc_entry = 99901
-        document.sap_response = simulated_res
-        repository.save(document)
-        service.compare_ocr_vs_sap_response(document, simulated_res)
-        service.learn_from_document(document)  # Save snapshot for future re-upload pre-population
-        return {
-            "result": simulated_res,
-            "sap_doc_num": 2600125,
-            "sap_doc_entry": 99901,
-        }
-    try:
-        result = post_draft(payload)
-        document.status = DocumentStatus.POSTED
-        if isinstance(result, dict):
-            document.sap_doc_num = result.get("DocNum")
-            document.sap_doc_entry = result.get("DocEntry")
-            document.sap_response = result
-            service.compare_ocr_vs_sap_response(document, result)
-        repository.mark_posted(document.invoice.supplier.sap_card_code or "", document.invoice.invoice_header.invoice_number)
-        repository.save(document)
-        service.learn_from_document(document)  # Save snapshot for future re-upload pre-population
-        return {"result": result, "sap_doc_num": document.sap_doc_num, "sap_doc_entry": document.sap_doc_entry}
-    except SapClientError as exc:
-        document.status = DocumentStatus.ERROR
-        document.sap_response = {"error": str(exc)}
-        repository.save(document)
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-
-
-@app.post("/documents/{document_id}/compare-training")
-def compare_training(document_id: UUID):
-    document = load_document(document_id)
-    return service.compare_ocr_vs_sap(document)
-
-
-@app.get("/api/sap/purchase-orders/{card_code}")
-def api_get_purchase_orders(card_code: str):
-    from app.sap_client import get_open_purchase_orders
-    try:
-        pos = get_open_purchase_orders(card_code)
-        return {"status": "success", "data": pos}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/extract-region")
-async def extract_region(file: UploadFile = File(...), coordinates: str = Form(...)):
-    import json
-    import io
-    from PIL import Image
-    try:
-        coords = json.loads(coordinates)
-        content = await file.read()
-        
-        try:
-            image = Image.open(io.BytesIO(content))
-            # Crop
-            x, y, w, h = coords.get("x",0), coords.get("y",0), coords.get("width",0), coords.get("height",0)
-            cropped = image.crop((x, y, x+w, y+h))
-            
-            # Pretend to extract text using Gemini Vision specifically for this tiny crop
-            buffered = io.BytesIO()
-            cropped.convert("RGB").save(buffered, format="JPEG")
-            b64_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
-        except Exception:
-            # If the frontend sent a dummy blob (which isn't a valid JPEG), 
-            # we just catch the PIL exception and proceed to return the mock text.
-            w = coords.get("width", 0)
-        # Call Gemini Vision API to extract text from this tiny crop
-        import os
-        import requests
-        
-        extracted = ""
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if gemini_key:
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key={gemini_key}"
-                payload = {
-                    "contents": [{
-                        "parts": [
-                            {"text": "Extract all the text visible in this image accurately. Output ONLY the raw extracted text. Do not add any markdown, JSON, or formatting."},
-                            {"inline_data": {"mime_type": "image/jpeg", "data": b64_image}}
-                        ]
-                    }]
-                }
-                response = requests.post(url, json=payload, timeout=10)
-                if response.status_code == 200:
-                    resp_json = response.json()
-                    candidates = resp_json.get("candidates", [])
-                    if candidates and "content" in candidates[0]:
-                        parts = candidates[0]["content"].get("parts", [])
-                        if parts:
-                            extracted = parts[0].get("text", "").strip()
-            except Exception as e:
-                print(f"Gemini region extraction failed: {e}")
-                
-        if not extracted:
-            # Fallback mock if API fails or no key
-            extracted = "LLM Appliances Pvt Ltd" if w > 200 else "04/10/24"
-
-        return {"status": "ok", "extracted_text": extracted}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))

@@ -24,6 +24,7 @@ class SapServiceLayerSettings:
     data_dir: Path
     ocr_provider: str
     tesseract_cmd: str
+    erp_type: str = "SAP_B1"
     db_engine: str = "mysql"
     mysql_host: str = "127.0.0.1"
     mysql_port: int = 3306
@@ -90,6 +91,7 @@ settings = SapServiceLayerSettings(
     mssql_password=os.getenv("MSSQL_PASSWORD", "Test@123"),
     ocr_provider=os.getenv("OCR_PROVIDER", "nvidia_ocr"),
     tesseract_cmd=os.getenv("OCR_TESSERACT_CMD", ""),
+    erp_type=os.getenv("ERP_TYPE", "SAP_B1"),
     ocr_api_key=os.getenv("NVIDIA_API_KEY", os.getenv("OCR_API_KEY", "")),
     ocr_api_url=os.getenv("NVIDIA_OCR_URL", os.getenv("OCR_API_URL", "")),
     ocr_model_name=os.getenv("OCR_MODEL_NAME", "NVIDIA Llama 3.2 Vision OCR"),

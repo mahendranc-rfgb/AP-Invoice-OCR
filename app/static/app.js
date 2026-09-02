@@ -18,7 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const ocrConfidence = document.getElementById("ocr-confidence-badges");
   const ocrText = document.getElementById("ocr-text-box");
   const showOcrTextBtn = document.getElementById("btn-show-ocr-text");
-  const invoiceForm = document.getElementById("sap-invoice-form");
+  const invoiceForm = document.getElementById("erp-invoice-form");
   const extractionStatusPill = document.getElementById("extraction-status-pill");
 
   const btnMap = document.getElementById("btn-map");
@@ -27,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnDraft = document.getElementById("btn-draft");
   const statusPill = document.getElementById("document-status-pill");
   const resultConsole = document.getElementById("result");
-  const sapDocNumDisplay = document.getElementById("sap-doc-num-display");
+  const sapDocNumDisplay = document.getElementById("erp-doc-num-display");
 
   const draftModal = document.getElementById("draft-modal");
   const closeDraftModal = document.getElementById("close-draft-modal");
@@ -46,9 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const queueCount = document.getElementById("queue-count");
   const documentsTbody = document.getElementById("documents");
   const refreshBtn = document.getElementById("refresh");
-  const toast = document.getElementById("toast");
-
-  // User & Admin Authentication Logic
+    // User & Admin Authentication Logic
   let currentUserRole = sessionStorage.getItem("user_role") || null;
   let currentUsername = sessionStorage.getItem("username") || null;
 
@@ -88,8 +86,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (roleBadge) {
         roleBadge.innerHTML = `👤 Logged in as: <strong>${storedUser}</strong> (${storedRole.toUpperCase()})`;
         roleBadge.style.background = storedRole === "admin" ? "rgba(234, 179, 8, 0.15)" : "rgba(16, 185, 129, 0.15)";
-        roleBadge.style.borderColor = storedRole === "admin" ? "var(--sap-gold)" : "#10b981";
-        roleBadge.style.color = storedRole === "admin" ? "var(--sap-gold)" : "#10b981";
+        roleBadge.style.borderColor = storedRole === "admin" ? "var(--erp-gold)" : "#10b981";
+        roleBadge.style.color = storedRole === "admin" ? "var(--erp-gold)" : "#10b981";
       }
       if (authModal) {
         authModal.classList.add("hidden");
@@ -198,6 +196,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   updateAuthUI();
 
+  async function applyDynamicFormSettings() {
+    try {
+      const res = await fetch("/admin/form-fields");
+      if (!res.ok) return;
+      const fields = await res.json();
+      fields.forEach(field => {
+        const input = document.querySelector(`[name="${field.field_id}"]`);
+        if (input) {
+          const row = input.closest('.erp-field-row');
+          if (row) {
+            row.style.display = field.visible ? "" : "none";
+          }
+          if (!field.visible) {
+            input.required = false;
+          } else if (field.required !== undefined) {
+            input.required = field.required;
+          }
+        }
+      });
+    } catch (err) {
+      console.error("Failed to apply dynamic form settings:", err);
+    }
+  }
+  
+  applyDynamicFormSettings();
 
   function switchPage(pageKey) {
     if (pageKey === "admin" && currentUserRole !== "admin") {
@@ -289,7 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (hash === "#training" || hash === "#ai-training-panel") switchPage("training");
     else if (hash === "#queue") switchPage("queue");
     else if (hash === "#admin" || hash === "#admin-panel") switchPage("admin");
-    else if (hash === "#invoice" || hash === "#sap-invoice-window") switchPage("invoice");
+    else if (hash === "#invoice" || hash === "#erp-invoice-window") switchPage("invoice");
     else if (hash === "#open-docs") switchPage("open-docs");
     else switchPage("dashboard");
   });
@@ -299,7 +322,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (initHash === "#training" || initHash === "#ai-training-panel") switchPage("training");
   else if (initHash === "#queue") switchPage("queue");
   else if (initHash === "#admin" || initHash === "#admin-panel") switchPage("admin");
-  else if (initHash === "#invoice" || initHash === "#sap-invoice-window") switchPage("invoice");
+  else if (initHash === "#invoice" || initHash === "#erp-invoice-window") switchPage("invoice");
   else switchPage("dashboard");
 
   // Subtab Navigation Handlers
@@ -323,15 +346,15 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   // SAP Window inner tabs (Contents, Logistics, Accounting, Tax & Compliance)
-  document.querySelectorAll(".sap-tab").forEach(tabBtn => {
+  document.querySelectorAll(".erp-tab").forEach(tabBtn => {
     tabBtn.addEventListener("click", () => {
-      const targetTab = tabBtn.getAttribute("data-sap-tab");
+      const targetTab = tabBtn.getAttribute("data-erp-tab");
       if (!targetTab) return;
-      document.querySelectorAll(".sap-tab").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".erp-tab").forEach(b => b.classList.remove("active"));
       tabBtn.classList.add("active");
 
-      document.querySelectorAll(".sap-tab-panel").forEach(panel => {
-        if (panel.id === `sap-tab-panel-${targetTab}`) {
+      document.querySelectorAll(".erp-tab-panel").forEach(panel => {
+        if (panel.id === `erp-tab-panel-${targetTab}`) {
           panel.classList.remove("hidden");
         } else {
           panel.classList.add("hidden");
@@ -373,10 +396,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await res.json();
       window.masterDataCache = data;
 
-      const appendAddNew = (htmlStr) => htmlStr + `<option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option>`;
+      const appendAddNew = (htmlStr) => htmlStr + `<option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option>`;
 
       if (data.vendors) {
-        document.querySelectorAll("select[name='sap_card_code'], #select-vendor-code").forEach(s => {
+        document.querySelectorAll("select[name='erp_card_code'], #select-vendor-code").forEach(s => {
           const currentVal = s.value;
           s.innerHTML = appendAddNew(`<option value="" data-name="" data-gstin="" data-currency="" data-pay-to="" data-ship-to="" data-pay-terms="" data-pos="">-- Select Vendor --</option>` + data.vendors.map(v => {
             const safeName = (v.name || "").replace(/"/g, "&quot;");
@@ -566,19 +589,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch("/admin/config");
       if (!res.ok) return;
       const cfg = await res.json();
-      const inputUrl = document.getElementById("cfg-input-url");
-      const inputCompany = document.getElementById("cfg-input-company");
-      const inputUsername = document.getElementById("cfg-input-username");
-      const inputPassword = document.getElementById("cfg-input-password");
       const ocrProviderSelect = document.getElementById("cfg-ocr-provider");
       const ocrApiKeyInput = document.getElementById("cfg-ocr-api-key");
       const ocrApiUrlInput = document.getElementById("cfg-ocr-api-url");
       const ocrModelNameInput = document.getElementById("cfg-ocr-model-name");
       const ocrEngineSpan = document.getElementById("cfg-ocr-engine");
 
-      if (inputUrl) inputUrl.value = cfg.sap_base_url || "";
-      if (inputCompany) inputCompany.value = cfg.sap_company_db || "";
-      if (inputUsername) inputUsername.value = cfg.sap_username || "";
       if (ocrProviderSelect && cfg.ocr_provider) ocrProviderSelect.value = cfg.ocr_provider;
       if (ocrApiKeyInput) ocrApiKeyInput.value = cfg.ocr_api_key || "";
       if (ocrApiUrlInput) ocrApiUrlInput.value = cfg.ocr_api_url || "";
@@ -598,10 +614,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (adminConfigForm) {
     adminConfigForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const sap_base_url = document.getElementById("cfg-input-url").value;
-      const sap_company_db = document.getElementById("cfg-input-company").value;
-      const sap_username = document.getElementById("cfg-input-username").value;
-      const sap_password = document.getElementById("cfg-input-password").value;
       const ocr_provider = document.getElementById("cfg-ocr-provider").value;
       const ocr_api_key = document.getElementById("cfg-ocr-api-key").value;
       const ocr_api_url = document.getElementById("cfg-ocr-api-url").value;
@@ -612,10 +624,6 @@ document.addEventListener("DOMContentLoaded", () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            sap_base_url,
-            sap_company_db,
-            sap_username,
-            sap_password,
             ocr_provider,
             ocr_api_key,
             ocr_api_url,
@@ -726,7 +734,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Option 1: Live SAP B1 Service Layer API Sync (Category-Specific)
-  const btnSapSyncMaster = document.getElementById("btn-sap-sync-master-data");
+  const btnSapSyncMaster = document.getElementById("btn-erp-sync-master-data");
   if (btnSapSyncMaster) {
     btnSapSyncMaster.addEventListener("click", async () => {
       const formCat = document.getElementById("admin-category");
@@ -737,8 +745,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const queryParam = selectedCat !== "all" ? `?category=${encodeURIComponent(selectedCat)}` : "";
       try {
-        showToast(`Connecting live to SAP Business One API and syncing ${selectedCat === 'all' ? 'all categories' : selectedCat}...`, "info");
-        const res = await fetch(`/admin/sap-sync-master-data${queryParam}`, { method: "POST" });
+        showToast(`Connecting live to ERP API and syncing ${selectedCat === 'all' ? 'all categories' : selectedCat}...`, "info");
+        const res = await fetch(`/admin/erp-sync-master-data${queryParam}`, { method: "POST" });
         if (!res.ok) {
           const err = await res.json();
           throw new Error(err.detail || "Failed to sync master data from SAP API");
@@ -905,7 +913,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const rowStyle = item.is_default ? ' style="background: rgba(234, 179, 8, 0.08);"' : "";
 
         let html = "<tr" + rowStyle + ">";
-        html += "<td><code style=\"color: var(--sap-gold); font-weight: 700;\">" + (item.code || "") + "</code></td>";
+        html += "<td><code style=\"color: var(--erp-gold); font-weight: 700;\">" + (item.code || "") + "</code></td>";
         html += "<td><strong>" + (item.name || "") + "</strong></td>";
         html += "<td><small>" + (gstin || "—") + "</small></td>";
         html += "<td><span class=\"pill gold\">" + currency + "</span></td>";
@@ -915,8 +923,8 @@ document.addEventListener("DOMContentLoaded", () => {
         html += "<td><span class=\"pill " + wtPillClass + "\">" + wtLabel + "</span></td>";
         html += "<td><small>" + pos + "</small></td>";
         html += "<td><div style=\"display:flex;gap:0.3rem;\">";
-        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--sap-gold);border-color:var(--sap-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
-        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
+        html += "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--erp-gold);border-color:var(--erp-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
+        html += "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
         html += "</div></td></tr>";
         return html;
       }
@@ -956,19 +964,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const defaultBtnSeries = item.is_default
           ? "<span class=\"pill gold\">⭐ DEFAULT</span>"
-          : "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;\" onclick=\"setDefaultAdminMaster('" + catSafe + "','" + codeSafe + "')\">Set Default</button>";
+          : "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;\" onclick=\"setDefaultAdminMaster('" + catSafe + "','" + codeSafe + "')\">Set Default</button>";
 
         let html = "<tr>";
         html += "<td><code>" + docType + "</code></td>";
-        html += "<td><strong style=\"color:var(--sap-gold);\">" + (item.code || "") + "</strong></td>";
+        html += "<td><strong style=\"color:var(--erp-gold);\">" + (item.code || "") + "</strong></td>";
         html += "<td><strong>" + (item.name || "") + "</strong></td>";
         html += "<td><span class=\"pill gold\">" + indicator + "</span></td>";
         html += "<td><code>" + bplId + "</code></td>";
         html += "<td>" + bplName + "</td>";
         html += "<td>" + defaultBtnSeries + "</td>";
         html += "<td><div style=\"display:flex;gap:0.3rem;\">";
-        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--sap-gold);border-color:var(--sap-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
-        html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
+        html += "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--erp-gold);border-color:var(--erp-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
+        html += "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
         html += "</div></td></tr>";
         return html;
       }
@@ -976,7 +984,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Generic category row
       const defaultBtnGen = item.is_default
         ? "<span class=\"pill gold\">⭐ DEFAULT</span>"
-        : "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;\" onclick=\"setDefaultAdminMaster('" + catSafe + "','" + codeSafe + "')\">Set Default</button>";
+        : "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;\" onclick=\"setDefaultAdminMaster('" + catSafe + "','" + codeSafe + "')\">Set Default</button>";
       const extraDisplay = item.extra ? ("<code>" + item.extra + "</code>") : "-";
 
       let html = "<tr>";
@@ -986,8 +994,8 @@ document.addEventListener("DOMContentLoaded", () => {
       html += "<td>" + extraDisplay + "</td>";
       html += "<td>" + defaultBtnGen + "</td>";
       html += "<td><div style=\"display:flex;gap:0.3rem;\">";
-      html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--sap-gold);border-color:var(--sap-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
-      html += "<button class=\"sap-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
+      html += "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--erp-gold);border-color:var(--erp-gold);\" onclick=\"editAdminMasterByCode('" + catSafe + "','" + codeSafe + "')\">✏️ Edit</button>";
+      html += "<button class=\"erp-btn outline\" style=\"padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);\" onclick=\"deleteAdminMaster('" + catSafe + "','" + codeSafe + "')\">🗑️ Delete</button>";
       html += "</div></td></tr>";
       return html;
     }).join("");
@@ -1106,7 +1114,7 @@ document.addEventListener("DOMContentLoaded", () => {
       <tr>
         <td><span class="pill neutral">${field.section.toUpperCase()}</span></td>
         <td><strong>${field.label}</strong></td>
-        <td><code style="color: var(--sap-gold);">${field.sap_param_name}</code></td>
+        <td><code style="color: var(--erp-gold);">${field.sap_param_name}</code></td>
         <td><code>${field.field_id}</code></td>
         <td><small>${field.field_type}</small></td>
         <td>
@@ -1121,7 +1129,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </td>
         <td><small>${field.required ? 'YES' : 'NO'}</small></td>
         <td>
-          <button class="sap-btn outline" style="padding: 0.15rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteFormField('${field.field_id}')">🗑️ Delete</button>
+          <button class="erp-btn outline" style="padding: 0.15rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteFormField('${field.field_id}')">🗑️ Delete</button>
         </td>
       </tr>
     `).join("");
@@ -1133,7 +1141,7 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       const section = document.getElementById("field-section-select").value;
       const field_id = document.getElementById("field-id-input").value;
-      const sap_param_name = document.getElementById("field-sap-input").value;
+      const sap_param_name = document.getElementById("field-erp-input").value;
       const label = document.getElementById("field-label-input").value;
       const field_type = document.getElementById("field-type-select").value;
       const visible = document.getElementById("field-visible-checkbox").checked;
@@ -1235,14 +1243,14 @@ document.addEventListener("DOMContentLoaded", () => {
         <td>
           <div style="display: flex; align-items: center; gap: 0.4rem;">
             <code id="pwd-text-${user.username}">••••••••</code>
-            <button type="button" class="sap-btn-icon" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;" title="Toggle Show Password" onclick="togglePasswordVisibility('${user.username}', '${user.password}')">👁️</button>
+            <button type="button" class="erp-btn-icon" style="padding: 0.1rem 0.3rem; font-size: 0.75rem;" title="Toggle Show Password" onclick="togglePasswordVisibility('${user.username}', '${user.password}')">👁️</button>
           </div>
         </td>
         <td><small>${new Date(user.created_at).toLocaleDateString()}</small></td>
         <td>
           <div style="display: flex; gap: 0.3rem;">
-            <button class="sap-btn outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--sap-gold); border-color: var(--sap-gold);" onclick="editAdminUser('${user.username}', '${user.role}', '${user.password}')">✏️ Edit / Reset Pwd</button>
-            ${(user.username === 'admin' || user.username === 'user') ? '<small style="color: var(--text-dim); margin-left: 0.3rem;">Protected</small>' : `<button class="sap-btn outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteAdminUser('${user.username}')">🗑️ Delete</button>`}
+            <button class="erp-btn outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--erp-gold); border-color: var(--erp-gold);" onclick="editAdminUser('${user.username}', '${user.role}', '${user.password}')">✏️ Edit / Reset Pwd</button>
+            ${(user.username === 'admin' || user.username === 'user') ? '<small style="color: var(--text-dim); margin-left: 0.3rem;">Protected</small>' : `<button class="erp-btn outline" style="padding: 0.15rem 0.4rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteAdminUser('${user.username}')">🗑️ Delete</button>`}
           </div>
         </td>
       </tr>
@@ -1254,7 +1262,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!el) return;
     if (el.textContent === "••••••••") {
       el.textContent = realPassword;
-      el.style.color = "var(--sap-gold)";
+      el.style.color = "var(--erp-gold)";
     } else {
       el.textContent = "••••••••";
       el.style.color = "";
@@ -1414,7 +1422,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Populate row selects from master data cache if available
     if (window.masterDataCache) {
       const data = window.masterDataCache;
-      const appendAddNew = (htmlStr) => htmlStr + `<option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option>`;
+      const appendAddNew = (htmlStr) => htmlStr + `<option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option>`;
 
       const glSelect = tr.querySelector("select[name='gl_account']");
       if (glSelect && data.accounts) {
@@ -1538,7 +1546,7 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (nameAttr === "costing_code2") { category = "cost_centers2"; fieldLabel = "Costing Code (Cost Center 2)"; }
     else if (nameAttr === "costing_code3") { category = "cost_centers3"; fieldLabel = "Costing Code (Cost Center 3)"; }
     else if (nameAttr === "sap_item_code") { category = "items"; fieldLabel = "SAP Item Code"; }
-    else if (nameAttr === "sap_card_code") { category = "vendors"; fieldLabel = "Supplier / Card Code"; }
+    else if (nameAttr === "erp_card_code") { category = "vendors"; fieldLabel = "Supplier / Card Code"; }
     else if (nameAttr === "local_currency" || nameAttr === "select-currency") { category = "currencies"; fieldLabel = "Currency"; }
     else if (nameAttr === "series" || nameAttr === "select-series") { category = "series"; fieldLabel = "Series"; }
     else if (nameAttr === "bpl_id_assigned_to_invoice" || nameAttr === "select-branch") { category = "branches"; fieldLabel = "Branch"; }
@@ -1668,30 +1676,6 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast("Deleted line item row.", "info");
       }
     });
-  }
-
-  function showToast(message, type = "info") {
-    toast.textContent = message;
-    toast.className = `toast ${type} show`;
-    setTimeout(() => {
-      toast.className = "toast";
-    }, 4000);
-  }
-  window.showToast = showToast;
-
-  function updateStepper(stepNumber) {
-    for (let i = 1; i <= 4; i++) {
-      const pill = document.getElementById(`step-pill-${i}`);
-      if (pill) {
-        if (i < stepNumber) {
-          pill.className = "stepper-step done";
-        } else if (i === stepNumber) {
-          pill.className = "stepper-step active";
-        } else {
-          pill.className = "stepper-step";
-        }
-      }
-    }
   }
 
   // Upload file handling (Single & Bulk)
@@ -1841,6 +1825,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const formatDateForInput = (dStr) => {
       if (!dStr) return "";
       try {
+        if (typeof dStr === 'string') {
+          if (dStr.length === 8 && /^\d{8}$/.test(dStr)) {
+            return `${dStr.substring(0,4)}-${dStr.substring(4,6)}-${dStr.substring(6,8)}`;
+          }
+          let cleanStr = dStr;
+          if (cleanStr.includes('T')) cleanStr = cleanStr.split('T')[0];
+          if (cleanStr.includes(' ')) cleanStr = cleanStr.split(' ')[0];
+          if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) return cleanStr;
+        }
         const d = new Date(dStr);
         if (isNaN(d.getTime())) return dStr;
         const yyyy = d.getFullYear();
@@ -1853,7 +1846,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     if (h.supplier_name) setInputValue("supplier_name", h.supplier_name);
-    if (s.sap_card_code) setInputValue("sap_card_code", s.sap_card_code);
+    if (s.erp_card_code) setInputValue("erp_card_code", s.erp_card_code);
     if (h.supplier_gstin) setInputValue("supplier_gstin", h.supplier_gstin);
     if (h.invoice_number) setInputValue("invoice_number", h.invoice_number);
     if (h.invoice_date) setInputValue("invoice_date", formatDateForInput(h.invoice_date));
@@ -1887,11 +1880,11 @@ document.addEventListener("DOMContentLoaded", () => {
           const input = tr.querySelector(`[name="${name}"]`);
           if (!input) return;
           if (input.tagName.toLowerCase() === "select") {
-            const optionExists = Array.from(input.options).some(opt => opt.value === String(val));
+            const optionExists = Array.from(input.options).some(opt => String(opt.value).trim() === String(val).trim());
             if (!optionExists && val !== null && val !== undefined && val !== "") {
               const newOpt = document.createElement("option");
-              newOpt.value = val;
-              newOpt.textContent = val;
+              newOpt.value = String(val).trim();
+              newOpt.textContent = String(val).trim();
               const addNewOpt = Array.from(input.options).find(o => o.value === "__ADD_NEW__");
               if (addNewOpt) {
                 input.insertBefore(newOpt, addNewOpt);
@@ -1911,12 +1904,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (line.description) setRowInput("description", line.description);
         if (line.sap_item_code) setRowInput("sap_item_code", line.sap_item_code);
         if (line.gl_account) setRowInput("gl_account", line.gl_account);
-        if (line.sac_entry) {
-          let sacValToSet = line.sac_entry;
+        if (line.sac_entry !== undefined && line.sac_entry !== null && line.sac_entry !== "") {
+          let sacValToSet = String(line.sac_entry).trim();
           if (window.sacEntriesCache) {
-             const matchedSac = window.sacEntriesCache.find(s => String(s.code) === String(line.sac_entry));
+             const matchedSac = window.sacEntriesCache.find(s => 
+               String(s.code).trim() === sacValToSet || 
+               String(s.extra_data).trim() === sacValToSet ||
+               String(s.name).trim() === sacValToSet
+             );
              if (matchedSac && matchedSac.extra_data) {
-                sacValToSet = matchedSac.extra_data;
+                sacValToSet = String(matchedSac.extra_data).trim();
+             } else if (matchedSac) {
+                sacValToSet = String(matchedSac.code).trim();
              }
           }
           setRowInput("sac_entry", sacValToSet);
@@ -1925,11 +1924,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (line.unit_price) setRowInput("unit_price", line.unit_price);
         if (line.tax_percentage) setRowInput("tax_percentage", line.tax_percentage);
         if (line.tax_code) setRowInput("tax_code", line.tax_code);
-        if (line.location_code) setRowInput("location_code", line.location_code);
-        if (line.wtax_liable) setRowInput("wtax_liable", line.wtax_liable);
-        if (line.costing_code) setRowInput("costing_code", line.costing_code);
-        if (line.costing_code2) setRowInput("costing_code2", line.costing_code2);
-        if (line.costing_code3) setRowInput("costing_code3", line.costing_code3);
+        if (line.location_code !== undefined && line.location_code !== null && line.location_code !== "") setRowInput("location_code", String(line.location_code).trim());
+        if (line.wtax_liable !== undefined && line.wtax_liable !== null && line.wtax_liable !== "") setRowInput("wtax_liable", line.wtax_liable);
+        if (line.costing_code !== undefined && line.costing_code !== null && line.costing_code !== "") setRowInput("costing_code", String(line.costing_code).trim());
+        if (line.costing_code2 !== undefined && line.costing_code2 !== null && line.costing_code2 !== "") setRowInput("costing_code2", String(line.costing_code2).trim());
+        if (line.costing_code3 !== undefined && line.costing_code3 !== null && line.costing_code3 !== "") setRowInput("costing_code3", String(line.costing_code3).trim());
 
         tbody.appendChild(tr);
       });
@@ -2161,7 +2160,7 @@ document.addEventListener("DOMContentLoaded", () => {
         comments: getInputValue("comments") || "Created through AI OCR Automation",
 
         // Accounting Tab Fields
-        journal_memo: getInputValue("journal_memo") || (getInputValue("sap_card_code") ? `A/P Invoices - ${getInputValue("sap_card_code")}` : null),
+        journal_memo: getInputValue("journal_memo") || (getInputValue("erp_card_code") ? `A/P Invoices - ${getInputValue("erp_card_code")}` : null),
         control_account: getInputValue("control_account") || "2201001",
         payment_method: getInputValue("payment_method") || null,
         central_bank_indicator: getInputValue("central_bank_indicator") || null,
@@ -2180,7 +2179,7 @@ document.addEventListener("DOMContentLoaded", () => {
         wt_code: document.getElementById("select-wtax-code") ? (document.getElementById("select-wtax-code").value || null) : null,
       },
       supplier: {
-        sap_card_code: getInputValue("sap_card_code") || null,
+        erp_card_code: getInputValue("erp_card_code") || null,
         confidence: 95.0,
       },
       lines: linesPayload,
@@ -2195,14 +2194,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Bind SAP Window Sub-Tabs (Contents, Logistics, Accounting, Tax & Compliance)
-  document.querySelectorAll(".sap-tabs-bar .sap-tab").forEach(tabBtn => {
+  document.querySelectorAll(".erp-tabs-bar .erp-tab").forEach(tabBtn => {
     tabBtn.addEventListener("click", () => {
-      document.querySelectorAll(".sap-tabs-bar .sap-tab").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".sap-tab-panel").forEach(p => p.classList.add("hidden"));
+      document.querySelectorAll(".erp-tabs-bar .erp-tab").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".erp-tab-panel").forEach(p => p.classList.add("hidden"));
 
       tabBtn.classList.add("active");
-      const target = tabBtn.getAttribute("data-sap-tab");
-      const panel = document.getElementById(`sap-tab-panel-${target}`);
+      const target = tabBtn.getAttribute("data-erp-tab");
+      const panel = document.getElementById(`erp-tab-panel-${target}`);
       if (panel) panel.classList.remove("hidden");
     });
   });
@@ -2326,7 +2325,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     try {
-      const res = await fetch(`/documents/${currentDocument.document_id}/sap-draft`, { method: "POST" });
+      const res = await fetch(`/documents/${currentDocument.document_id}/erp-draft`, { method: "POST" });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || "Failed to build draft payload");
@@ -2345,15 +2344,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!currentDocument) return;
     try {
       postDraftBtn.disabled = true;
-      postDraftBtn.textContent = "Posting to SAP Service Layer...";
+      postDraftBtn.textContent = "Posting to ERP API...";
 
-      const res = await fetch(`/documents/${currentDocument.document_id}/sap-post`, { method: "POST" });
+      const res = await fetch(`/documents/${currentDocument.document_id}/erp-post`, { method: "POST" });
       const resData = await res.json();
       const sapDocNum = resData.sap_doc_num || (resData.result ? resData.result.DocNum : null);
       const sapDocEntry = resData.sap_doc_entry || (resData.result ? resData.result.DocEntry : null);
 
       draftModal.classList.add("hidden");
-      showToast(`A/P Invoice successfully posted to SAP Business One! DocNum: #${sapDocNum || 'N/A'}, DocEntry: ${sapDocEntry || 'N/A'}`, "success");
+      showToast(`A/P Invoice successfully posted to ERP! DocNum: #${sapDocNum || 'N/A'}, DocEntry: ${sapDocEntry || 'N/A'}`, "success");
 
       if (sapDocNumDisplay && sapDocNum) {
         sapDocNumDisplay.textContent = `DocNum: #${sapDocNum} (DocEntry: ${sapDocEntry})`;
@@ -2400,7 +2399,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       trainingDiffViewer.innerHTML = `
         <div style="font-size: 0.85rem; color: #fff;">
-          <strong>Supplier:</strong> ${comp.supplier_name} ➔ <strong>CardCode:</strong> <code style="color: var(--sap-gold);">${comp.card_code}</code><br>
+          <strong>Supplier:</strong> ${comp.supplier_name} ➔ <strong>CardCode:</strong> <code style="color: var(--erp-gold);">${comp.card_code}</code><br>
           <strong>Invoice Ref:</strong> <code>${comp.invoice_number}</code><br>
           <span class="pill success" style="margin-top: 0.5rem; display: inline-block;">Corrections Saved into Level 2 Memory</span>
         </div>
@@ -2450,7 +2449,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td><strong>${item.supplier_name || 'N/A'}</strong></td>
             <td><code>${item.ocr_value}</code></td>
             <td><code>${item.ai_value || 'None'}</code></td>
-            <td><strong style="color: var(--sap-gold);">${item.final_correct_value}</strong></td>
+            <td><strong style="color: var(--erp-gold);">${item.final_correct_value}</strong></td>
             <td><span class="pill ${typeClass}">${item.mapping_type}</span></td>
             <td>${payloadDisplay}</td>
             <td><small>${new Date(item.correction_date).toLocaleString()}</small></td>
@@ -2475,7 +2474,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let html = `<div class="console-title">Validation Output for Document: ${doc.document_id}</div>`;
-    html += `<b>Status:</b> ${doc.status} | <b>CardCode:</b> ${doc.invoice.supplier.sap_card_code || 'Unmapped'}<br>`;
+    html += `<b>Status:</b> ${doc.status} | <b>CardCode:</b> ${doc.invoice.supplier.erp_card_code || 'Unmapped'}<br>`;
 
     if (doc.validation) {
       html += `<b>Validation Passed:</b> ${doc.validation.passed ? "YES ✅" : "NO ❌"} | <b>Confidence:</b> ${doc.validation.overall_confidence}%<br>`;
@@ -2528,13 +2527,13 @@ document.addEventListener("DOMContentLoaded", () => {
       else if (doc.status === "APPROVED" || doc.status === "SAP_DRAFT_READY") statusClass = "gold";
       else if (doc.status === "VALIDATED") statusClass = "info";
 
-      const supplierText = s.sap_card_code ? `<code>${s.sap_card_code}</code> - ${h.supplier_name}` : h.supplier_name;
+      const supplierText = s.erp_card_code ? `<code>${s.erp_card_code}</code> - ${h.supplier_name}` : h.supplier_name;
 
       const actionButtons = `
         <div style="display: flex; gap: 0.3rem;">
-          <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="loadDocFromQueue('${doc.document_id}')">Select</button>
-          <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteDocument('${doc.document_id}')">🗑️ Delete</button>
-          ${doc.sap_response || doc.status === 'POSTED' ? `<button class="sap-btn gold" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="viewSapResponse('${doc.document_id}')">🔍 SAP Log</button>` : ''}
+          <button class="erp-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="loadDocFromQueue('${doc.document_id}')">Select</button>
+          <button class="erp-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteDocument('${doc.document_id}')">🗑️ Delete</button>
+          ${doc.sap_response || doc.status === 'POSTED' ? `<button class="erp-btn gold" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="viewSapResponse('${doc.document_id}')">🔍 ERP Log</button>` : ''}
         </div>
       `;
 
@@ -2544,7 +2543,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <td>${docNumDisplay}</td>
           <td>${docEntryDisplay}</td>
           <td>${supplierText}</td>
-          <td style="font-weight: 700; color: var(--sap-gold);">INR ${parseFloat(total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+          <td style="font-weight: 700; color: var(--erp-gold);">INR ${parseFloat(total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
           <td>INR ${parseFloat(taxAmt).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
           <td><span class="pill ${statusClass}">${doc.status}</span></td>
           <td>${actionButtons}</td>
@@ -2613,20 +2612,20 @@ document.addEventListener("DOMContentLoaded", () => {
           else if (doc.status === "APPROVED" || doc.status === "SAP_DRAFT_READY") statusClass = "gold";
           else if (doc.status === "VALIDATED") statusClass = "info";
 
-          const supplierText = s.sap_card_code ? `<code>${s.sap_card_code}</code> - ${h.supplier_name}` : h.supplier_name;
+          const supplierText = s.erp_card_code ? `<code>${s.erp_card_code}</code> - ${h.supplier_name}` : h.supplier_name;
 
           return `
             <tr>
               <td><strong>${h.invoice_number}</strong></td>
               <td>${docNumDisplay}</td>
               <td>${supplierText}</td>
-              <td style="font-weight: 700; color: var(--sap-gold);">INR ${parseFloat(total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+              <td style="font-weight: 700; color: var(--erp-gold);">INR ${parseFloat(total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
               <td>INR ${parseFloat(taxAmt).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
               <td><span class="pill ${statusClass}">${doc.status}</span></td>
               <td>
                 <div style="display: flex; gap: 0.3rem;">
-                  <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="loadDocFromQueue('${doc.document_id}')">Select</button>
-                  <button class="sap-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteDocument('${doc.document_id}')">🗑️ Delete</button>
+                  <button class="erp-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="loadDocFromQueue('${doc.document_id}')">Select</button>
+                  <button class="erp-btn outline" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: var(--accent-rose); border-color: var(--accent-rose);" onclick="deleteDocument('${doc.document_id}')">🗑️ Delete</button>
                 </div>
               </td>
             </tr>
@@ -2640,7 +2639,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (vendorsDiv) {
       const vendorCounts = {};
       documentQueue.forEach(d => {
-        const code = d.invoice.supplier.sap_card_code || "UNMAPPED";
+        const code = d.invoice.supplier.erp_card_code || "UNMAPPED";
         const name = d.invoice.invoice_header.supplier_name || "Unknown Supplier";
         const key = `${code}___${name}`;
         vendorCounts[key] = (vendorCounts[key] || 0) + 1;
@@ -2683,8 +2682,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  const sapResponseModal = document.getElementById("sap-response-modal");
-  const closeSapResponseModal = document.getElementById("close-sap-response-modal");
+  const sapResponseModal = document.getElementById("erp-response-modal");
+  const closeSapResponseModal = document.getElementById("close-erp-response-modal");
   if (closeSapResponseModal && sapResponseModal) {
     closeSapResponseModal.addEventListener("click", () => sapResponseModal.classList.add("hidden"));
   }
@@ -2693,17 +2692,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const doc = documentQueue.find(d => String(d.document_id) === String(docId));
     if (!doc) return;
 
-    const modal = document.getElementById("sap-response-modal");
-    const summaryDiv = document.getElementById("sap-response-summary");
-    const jsonPre = document.getElementById("sap-response-json");
+    const modal = document.getElementById("erp-response-modal");
+    const summaryDiv = document.getElementById("erp-response-summary");
+    const jsonPre = document.getElementById("erp-response-json");
 
     if (summaryDiv) {
       summaryDiv.innerHTML = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem; color: #fff;">
           <div><strong>Vendor Ref / Inv #:</strong> ${doc.invoice.invoice_header.invoice_number}</div>
-          <div><strong>SAP DocNum:</strong> <span style="color: var(--sap-gold); font-weight:700;">#${doc.sap_doc_num || 'N/A'}</span></div>
+          <div><strong>SAP DocNum:</strong> <span style="color: var(--erp-gold); font-weight:700;">#${doc.sap_doc_num || 'N/A'}</span></div>
           <div><strong>SAP DocEntry:</strong> <code>${doc.sap_doc_entry || 'N/A'}</code></div>
-          <div><strong>CardCode:</strong> <code>${doc.invoice.supplier.sap_card_code || 'N/A'}</code></div>
+          <div><strong>CardCode:</strong> <code>${doc.invoice.supplier.erp_card_code || 'N/A'}</code></div>
           <div><strong>Doc Total:</strong> INR ${parseFloat(doc.invoice.totals.grand_total).toLocaleString('en-IN', {minimumFractionDigits: 2})}</div>
           <div><strong>Tax Total:</strong> INR ${parseFloat(doc.invoice.totals.tax_amount).toLocaleString('en-IN', {minimumFractionDigits: 2})}</div>
         </div>
@@ -2727,23 +2726,23 @@ document.addEventListener("DOMContentLoaded", () => {
         <tr class="selected-row">
           <td class="cell-center row-num">0</td>
           <td><input name="description" placeholder="Description" required style="width: 100%;"></td>
-          <td><select name="sap_item_code" style="width: 100%;"><option value="">-- ItemCode --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="sap_item_code" style="width: 100%;"><option value="">-- ItemCode --</option><option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option></select></td>
           <td>
             <select name="gl_account" class="gl-account-select" style="width: 100%;">
               <option value="">-- GL Account --</option>
-              <option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option>
+              <option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option>
             </select>
           </td>
-          <td><select name="sac_entry" style="width: 100%;"><option value="">-- SAC --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="sac_entry" style="width: 100%;"><option value="">-- SAC --</option><option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option></select></td>
           <td><input name="quantity" type="number" value="1" min="0.001" step="0.001" style="width: 100%;"></td>
           <td><input name="unit_price" type="number" placeholder="Price" min="0" step="0.01" style="width: 100%;"></td>
           <td><input name="tax_percentage" type="number" value="0" min="0" step="0.01" style="width: 100%;"></td>
-          <td><select name="tax_code" style="width: 100%;"><option value="">-- Tax Code --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="tax_code" style="width: 100%;"><option value="">-- Tax Code --</option><option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option></select></td>
           <td><select name="wtax_liable" style="width: 100%;"><option value="tNO">No</option><option value="tYES" selected>Yes</option></select></td>
-          <td><select name="location_code" style="width: 100%;"><option value="">-- Location --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
-          <td><select name="costing_code" style="width: 100%;"><option value="">-- Cost Center --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
-          <td><select name="costing_code2" style="width: 100%;"><option value="">-- Cost Center 2 --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
-          <td><select name="costing_code3" style="width: 100%;"><option value="">-- Cost Center 3 --</option><option value="__ADD_NEW__" style="color: var(--sap-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="location_code" style="width: 100%;"><option value="">-- Location --</option><option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="costing_code" style="width: 100%;"><option value="">-- Cost Center --</option><option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="costing_code2" style="width: 100%;"><option value="">-- Cost Center 2 --</option><option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option></select></td>
+          <td><select name="costing_code3" style="width: 100%;"><option value="">-- Cost Center 3 --</option><option value="__ADD_NEW__" style="color: var(--erp-gold); font-weight: bold;">➕ Add New...</option></select></td>
           <td class="cell-readonly line-total-cell">INR 0.00</td>
           <td><button type="button" class="btn-remove-row" style="color: var(--accent-rose); background: none; border: none; font-size: 1.1rem; cursor: pointer;">×</button></td>
         </tr>
@@ -2842,7 +2841,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Handle Vendor Code selection to auto-populate Vendor Name & learned defaults across header and grid
-  document.querySelectorAll("select[name='sap_card_code'], #select-vendor-code").forEach(selectVendorEl => {
+  document.querySelectorAll("select[name='erp_card_code'], #select-vendor-code").forEach(selectVendorEl => {
     selectVendorEl.addEventListener("change", async (e) => {
       const selectedOpt = e.target.options[e.target.selectedIndex];
       if (selectedOpt && selectedOpt.value && selectedOpt.value !== "__ADD_NEW__") {
@@ -2924,16 +2923,37 @@ document.addEventListener("DOMContentLoaded", () => {
                 const input = tr.querySelector(`[name="${name}"]`);
                 if (!input) return;
                 if (input.tagName.toLowerCase() === "select") {
-                  const optionExists = Array.from(input.options).some(opt => String(opt.value) === String(val));
+                  let targetVal = String(val).trim();
+                  if (name === "sac_entry" && window.sacEntriesCache) {
+                    const matchedSac = window.sacEntriesCache.find(s =>
+                      String(s.code).trim() === targetVal ||
+                      String(s.extra_data).trim() === targetVal ||
+                      String(s.name).trim() === targetVal
+                    );
+                    if (matchedSac && matchedSac.extra_data) {
+                      targetVal = String(matchedSac.extra_data).trim();
+                    } else if (matchedSac) {
+                      targetVal = String(matchedSac.code).trim();
+                    }
+                  }
+                  const optionExists = Array.from(input.options).some(opt => String(opt.value).trim() === targetVal);
                   if (!optionExists) {
                     const newOpt = document.createElement("option");
-                    newOpt.value = val;
-                    newOpt.textContent = val;
-                    input.appendChild(newOpt);
+                    newOpt.value = targetVal;
+                    newOpt.textContent = targetVal;
+                    const addNewOpt = Array.from(input.options).find(o => o.value === "__ADD_NEW__");
+                    if (addNewOpt) {
+                      input.insertBefore(newOpt, addNewOpt);
+                    } else {
+                      input.appendChild(newOpt);
+                    }
                   }
-                  input.value = val;
+                  input.value = targetVal;
+                  input.dispatchEvent(new Event("change", { bubbles: true }));
                 } else {
                   input.value = val;
+                  input.dispatchEvent(new Event("input", { bubbles: true }));
+                  input.dispatchEvent(new Event("change", { bubbles: true }));
                 }
               };
 
@@ -3040,7 +3060,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const dumpFileInput = document.getElementById("ai-dump-file-input");
   const dumpFileNameSpan = document.getElementById("ai-dump-file-name");
   const uploadDumpBtn = document.getElementById("btn-upload-dump-train");
-  const syncSapHistoryBtn = document.getElementById("btn-sync-sap-history-train");
+  const syncSapHistoryBtn = document.getElementById("btn-sync-erp-history-train");
 
   if (browseDumpBtn && dumpFileInput) {
     browseDumpBtn.addEventListener("click", () => dumpFileInput.click());
@@ -3075,11 +3095,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (syncSapHistoryBtn) {
     syncSapHistoryBtn.addEventListener("click", async () => {
-      const topInput = document.getElementById("ai-sap-history-top");
+      const topInput = document.getElementById("ai-erp-history-top");
       const topCount = topInput ? parseInt(topInput.value) || 100 : 100;
       try {
         showToast(`Fetching last ${topCount} posted invoices from SAP B1 API to train AI Model...`, "info");
-        const res = await fetch(`/admin/ai-train/sync-sap-history?top=${topCount}`, { method: "POST" });
+        const res = await fetch(`/admin/ai-train/sync-erp-history?top=${topCount}`, { method: "POST" });
         if (!res.ok) throw new Error("SAP API history sync failed");
         const data = await res.json();
         showToast(data.message || "AI Model trained from SAP API!", "success");
@@ -3133,7 +3153,7 @@ window.onPayToCodeChange = function() {
 
 // Hook into existing form inputs to catch Vendor selection change
 document.addEventListener("change", (e) => {
-  if (e.target.name === "sap_card_code" && e.target.value && e.target.value !== "__ADD_NEW__") {
+  if (e.target.name === "erp_card_code" && e.target.value && e.target.value !== "__ADD_NEW__") {
     loadVendorAddressesForInvoice(e.target.value);
     
     // Auto-select WHT Code based on vendor master data
@@ -3267,7 +3287,7 @@ async function renderAdminWtaxTable() {
         <td><code>${c.wtax_type === 'G' ? 'Gross' : 'Net'}</code></td>
         <td><span class="pill ${c.active ? 'success' : 'neutral'}">${c.active ? 'Active' : 'Inactive'}</span></td>
         <td>
-          <button class="sap-btn outline" style="padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);" onclick="deleteWtaxCode('${c.wtax_code}')">🗑️ Delete</button>
+          <button class="erp-btn outline" style="padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);" onclick="deleteWtaxCode('${c.wtax_code}')">🗑️ Delete</button>
         </td>
       </tr>
     `).join("");
@@ -3361,7 +3381,7 @@ window.loadVendorAddressTable = async function() {
         <td style="white-space: pre-wrap; font-size: 0.8rem;">${a.address_text}</td>
         <td>${a.is_default ? '<span class="pill success">⭐ Yes</span>' : 'No'}</td>
         <td>
-          <button class="sap-btn outline" style="padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);" onclick="deleteVendorAddress('${a.vendor_code}', '${a.address_code}', '${a.address_type}')">🗑️ Delete</button>
+          <button class="erp-btn outline" style="padding:0.15rem 0.4rem;font-size:0.72rem;color:var(--accent-rose);border-color:var(--accent-rose);" onclick="deleteVendorAddress('${a.vendor_code}', '${a.address_code}', '${a.address_type}')">🗑️ Delete</button>
         </td>
       </tr>
     `).join("");
@@ -3413,7 +3433,7 @@ window.deleteVendorAddress = async function(vCode, aCode, aType) {
 
 // Custom Searchable Dropdown Implementation
 function initCustomSearchableSelects() {
-  document.querySelectorAll(".sap-grid-table select, .sap-header-box select").forEach(select => {
+  document.querySelectorAll(".erp-grid-table select, .erp-header-box select").forEach(select => {
     if (select.dataset.searchableInitialized) return;
 
     select.dataset.searchableInitialized = "true";
@@ -3720,8 +3740,8 @@ window.loadValidationRules = async function() {
                     '<span class="pill ' + (r.is_active ? 'success' : 'danger') + '">' + (r.is_active ? 'Active' : 'Inactive') + '</span>' +
                 '</td>' +
                 '<td>' +
-                    '<button type="button" class="sap-btn outline small" onclick=\'editValidationRule(' + JSON.stringify(r).replace(/'/g, "&#39;") + ')\'>✏️ Edit</button> ' +
-                    '<button type="button" class="sap-btn outline small" style="color:var(--accent-rose); border-color:var(--accent-rose);" onclick="deleteValidationRule(' + r.id + ', \'' + r.rule_name.replace(/'/g, "\\'") + '\')\">🗑️ Delete</button>' +
+                    '<button type="button" class="erp-btn outline small" onclick=\'editValidationRule(' + JSON.stringify(r).replace(/'/g, "&#39;") + ')\'>✏️ Edit</button> ' +
+                    '<button type="button" class="erp-btn outline small" style="color:var(--accent-rose); border-color:var(--accent-rose);" onclick="deleteValidationRule(' + r.id + ', \'' + r.rule_name.replace(/'/g, "\\'") + '\')\">🗑️ Delete</button>' +
                 '</td>' +
             '</tr>'
         ).join('');
@@ -3812,14 +3832,14 @@ window.loadAllOpenDocs = async function() {
             
             html += '<tr>';
             html += '<td><span class="pill neutral">' + d.doc_type + '</span></td>';
-            html += '<td><code style="color:var(--sap-gold);">' + d.doc_num + '</code></td>';
+            html += '<td><code style="color:var(--erp-gold);">' + d.doc_num + '</code></td>';
             html += '<td>' + d.vendor_code + '</td>';
             let parsedDate = new Date(d.doc_date);
             let displayDate = isNaN(parsedDate.getTime()) ? (d.doc_date || '-') : parsedDate.toLocaleDateString();
             html += '<td>' + displayDate + '</td>';
             html += '<td><strong>' + parseFloat(d.total_amount).toFixed(2) + '</strong></td>';
             
-            html += '<td><button class="sap-btn gold small" onclick="loadDocumentIntoForm(this)" data-cachekey="' + cacheKey + '">Load into Form</button></td>';
+            html += '<td><button class="erp-btn gold small" onclick="loadDocumentIntoForm(this)" data-cachekey="' + cacheKey + '">Load into Form</button></td>';
             html += '</tr>';
         });
         tbody.innerHTML = html;
@@ -3905,7 +3925,12 @@ window.loadDocumentIntoForm = function(btnEl) {
                     unit_price: l.UnitPrice || 0,
                     line_total: l.LineTotal || 0,
                     tax_code: l.TaxCode || '',
-                    location_code: l.WarehouseCode || '',
+                    location_code: l.LocationCode || l.WarehouseCode || '',
+                    gl_account: l.AccountCode || '',
+                    sac_entry: l.SacEntry || l.SACEntry || '',
+                    costing_code: l.CostingCode || '',
+                    costing_code2: l.CostingCode2 || '',
+                    costing_code3: l.CostingCode3 || '',
                     base_line_num: l.LineNum || 0,
                     base_doc_entry: docData.doc_entry,
                     base_doc_type: docData.doc_type === 'PO' ? '22' : '20'
@@ -3916,14 +3941,23 @@ window.loadDocumentIntoForm = function(btnEl) {
         }
     }
 
+    let rawLinesForHeader = {};
+    if (docData.lines_payload) {
+        try {
+            rawLinesForHeader = typeof docData.lines_payload === 'string' ? JSON.parse(docData.lines_payload) : docData.lines_payload;
+        } catch (e) {}
+    }
+
     const inv = {
         invoice_header: {
-            invoice_date: docData.doc_date,
-            posting_date: docData.doc_date,
-            due_date: docData.doc_date
+            invoice_date: rawLinesForHeader.DocDate || docData.doc_date,
+            posting_date: rawLinesForHeader.DocDate || docData.doc_date,
+            due_date: rawLinesForHeader.DocDueDate || docData.doc_date,
+            document_date: rawLinesForHeader.TaxDate || docData.doc_date,
+            supplier_gstin: rawLinesForHeader.LicTradNum || ''
         },
         supplier: {
-            sap_card_code: docData.vendor_code
+            erp_card_code: docData.vendor_code
         },
         lines: parsedLines
     };

@@ -439,6 +439,7 @@ class InvoiceService:
         pay_to_address = None
         ship_to_code = None
         pay_to_code = None
+        gstin = None
 
         sap_master = self.repository.get_sap_vendor_master(card_code_clean)
         if sap_master:
@@ -450,6 +451,8 @@ class InvoiceService:
                     payment_group = int(vm["payment_group"])
                 except Exception:
                     pass
+            if vm.get("gstin"):
+                gstin = vm["gstin"]
 
         custom_data = self.repository.get_custom_master_data("vendors")
         for c in custom_data:
@@ -460,6 +463,7 @@ class InvoiceService:
                         import json
                         extra = json.loads(c["extra_data"]) if isinstance(c["extra_data"], str) else c["extra_data"]
                         if extra.get("currency"): currency = extra["currency"]
+                        if extra.get("gstin"): gstin = extra["gstin"]
                         if extra.get("payment_group"):
                             try: payment_group = int(extra["payment_group"])
                             except Exception: pass
@@ -534,6 +538,7 @@ class InvoiceService:
         return {
             "card_code": card_code_clean,
             "supplier_name": vendor_name,
+            "supplier_gstin": gstin,
             "series": series_val,
             "branch": str(branch_val),
             "bpl_id_assigned_to_invoice": branch_val,
@@ -1204,8 +1209,8 @@ class InvoiceService:
         return self.train_ai_model_from_records(records)
 
     def train_ai_from_sap_history(self, top: int = 100) -> dict:
-        from .sap_client import fetch_historical_ap_invoices
-        raw_invoices = fetch_historical_ap_invoices(top=top)
+        from .erp.factory import get_erp_client
+        raw_invoices = get_erp_client().fetch_historical_ap_invoices(top=top)
         records = []
         for inv in raw_invoices:
             sup_name = inv.get("CardName") or ""

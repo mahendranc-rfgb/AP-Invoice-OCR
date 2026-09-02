@@ -42,7 +42,7 @@
 }
 
 .step-pill.active .num {
-  background: var(--sap-blue-brand);
+  background: var(--erp-blue-brand);
   color: #fff;
   box-shadow: none;
 }
@@ -435,7 +435,7 @@ td {
 }
 
 /* Table View Max Heights & Internal Scrollability */
-.sap-table-wrapper {
+.erp-table-wrapper {
   max-height: 480px;
   overflow-y: auto;
   overflow-x: auto;
@@ -444,13 +444,13 @@ td {
   box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
-.sap-grid-table {
+.erp-grid-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
 
-.sap-grid-table th {
+.erp-grid-table th {
   position: sticky;
   top: 0;
   z-index: 10;
@@ -466,26 +466,26 @@ td {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
-.sap-grid-table td {
+.erp-grid-table td {
   padding: 0.65rem 0.85rem;
   border-bottom: 1px solid var(--border-color);
   font-size: 0.84rem;
   transition: background 0.15s ease;
 }
 
-.sap-grid-table td select,
-.sap-grid-table td input {
+.erp-grid-table td select,
+.erp-grid-table td input {
   max-width: 100%;
   text-overflow: ellipsis;
 }
 
-.sap-grid-table tbody tr:hover {
+.erp-grid-table tbody tr:hover {
   background: rgba(56, 189, 248, 0.08) !important;
 }
 
-.sap-grid-table tbody tr.selected-row {
+.erp-grid-table tbody tr.selected-row {
   background: rgba(245, 158, 11, 0.12) !important;
-  border-left: 3px solid var(--sap-gold);
+  border-left: 3px solid var(--erp-gold);
 }
 
 /* Page View Visibility */
@@ -502,7 +502,7 @@ td {
   display: flex;
   gap: 0.6rem;
   margin-bottom: 1.5rem;
-  background: var(--sap-bg, #f8f9fa);
+  background: var(--erp-bg, #f8f9fa);
   padding: 0.5rem 0.75rem;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
@@ -510,7 +510,7 @@ td {
 }
 
 .subtab-btn {
-  background: var(--sap-panel-bg, #ffffff);
+  background: var(--erp-panel-bg, #ffffff);
   border: 1px solid var(--border-color);
   color: var(--text-muted);
   padding: 0.55rem 1.1rem;
@@ -525,15 +525,15 @@ td {
 }
 
 .subtab-btn:hover {
-  color: var(--sap-blue-brand);
+  color: var(--erp-blue-brand);
   background: rgba(37, 99, 235, 0.05);
-  border-color: var(--sap-blue-brand);
+  border-color: var(--erp-blue-brand);
 }
 
 .subtab-btn.active {
   color: #fff;
-  background: var(--sap-blue-brand);
-  border: 1px solid var(--sap-blue-brand);
+  background: var(--erp-blue-brand);
+  border: 1px solid var(--erp-blue-brand);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
   font-weight: 700;
 }
@@ -565,7 +565,7 @@ td {
   content: "▼";
   font-size: 0.7rem;
   margin-left: 8px;
-  color: var(--sap-blue-brand);
+  color: var(--erp-blue-brand);
 }
 
 .custom-searchable-dropdown {
@@ -575,7 +575,7 @@ td {
   width: max-content;
   max-width: 400px;
   background: #ffffff;
-  border: 1px solid var(--sap-blue-brand);
+  border: 1px solid var(--erp-blue-brand);
   border-radius: var(--radius-sm);
   z-index: 99999;
   display: none;
@@ -605,7 +605,7 @@ td {
 }
 
 .custom-searchable-search input:focus {
-  border-color: var(--sap-blue-brand);
+  border-color: var(--erp-blue-brand);
 }
 
 .custom-searchable-list {
@@ -626,7 +626,7 @@ td {
 
 .custom-searchable-list li:hover {
   background: #f1f5f9;
-  color: var(--sap-blue-brand);
+  color: var(--erp-blue-brand);
 }
 
 .custom-searchable-list li.hidden {
@@ -634,7 +634,7 @@ td {
 }
 
 .custom-searchable-list li.add-new {
-  color: var(--sap-blue-brand);
+  color: var(--erp-blue-brand);
   font-weight: bold;
 }
 
@@ -670,7 +670,7 @@ td {
 .login-logo-icon {
   width: 40px;
   height: 40px;
-  background: var(--sap-gold);
+  background: var(--erp-gold);
   clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
 }
 .login-logo-text {
